@@ -12,7 +12,7 @@ type CompositeNode<T> = {
         DollarType<T> | undefined;
 } & Node<T>;
 
-type PrimitiveType = string | number | boolean;
+type PrimitiveType = string | number | boolean | Date;
 
 type Editable<T> = NonNullable<T> extends PrimitiveType ? Node<T> : CompositeNode<T>;
 
@@ -21,7 +21,7 @@ function isEditableObject(obj?: any): obj is object & { [key: string]: Node<any>
 }
 
 function isEditablePrimitive(obj?: any) {
-    return Object(obj) !== obj || obj instanceof Promise || obj instanceof Date;
+    return Object(obj) !== obj || obj instanceof Date;
 }
 
 function createTargetValue<T>(data: T) {

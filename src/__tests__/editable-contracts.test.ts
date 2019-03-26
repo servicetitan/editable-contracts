@@ -149,3 +149,6 @@ export interface Form {
 // // errors
 // form3.toFixed
 // // end errors
+
+// let form4 = editable<Date>(new Date());
+// form4.value.getDay
