@@ -3,7 +3,7 @@
     "transform": {
         "^.+\\.tsx?$": "ts-jest"
     },
-    "testRegex": "(/tests/.*|(\\.|/)(test|spec))\\.(ts?)$",
+    "testRegex": "(/tests/.*|(\\.|/)(test|spec))\\.(tsx?)$",
     "testPathIgnorePatterns": [".d.tsx?"],
     "moduleFileExtensions": [
         "ts",
@@ -15,6 +15,6 @@
     ],
     "collectCoverage": true,
     "collectCoverageFrom": [
-        "src/**/*.ts"
+        "src/**/*.{ts,tsx}"
     ]
 }
