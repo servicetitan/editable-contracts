@@ -1,6 +1,6 @@
 {
   "name": "editable-contracts",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "JSON driven editable contracts",
   "main": "dist/src/editable-contracts.js",
   "typings": "dist/src/editable-contracts.d.ts",
