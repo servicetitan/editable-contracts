@@ -1,0 +1,20 @@
+{
+    "verbose": true,
+    "transform": {
+        "^.+\\.tsx?$": "ts-jest"
+    },
+    "testRegex": "(/tests/.*|(\\.|/)(test|spec))\\.(ts?)$",
+    "testPathIgnorePatterns": [".d.tsx?"],
+    "moduleFileExtensions": [
+        "ts",
+        "tsx",
+        "js",
+        "jsx",
+        "json",
+        "node"
+    ],
+    "collectCoverage": true,
+    "collectCoverageFrom": [
+        "**/*.ts"
+    ]
+}
