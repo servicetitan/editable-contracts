@@ -30,7 +30,7 @@ test('editable', () => {
             key3: [1, 2, 3]
         }
     };
-    const editableInventoryDto = editable<InventoryDto>(inventoryDto);
+    const editableInventoryDto = editable(inventoryDto);
 
     expect(editableInventoryDto.value).toEqual(inventoryDto);
 
