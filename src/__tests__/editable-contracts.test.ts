@@ -39,25 +39,25 @@ describe('onChange', () => {
     // TODO: split to multiple tests
     test('editable', () => {
         const [inventoryDto, editableInventoryDto] = editableInventory();
-    
+
         expect(editableInventoryDto.value).toEqual(inventoryDto);
-    
+
         expect(editableInventoryDto.$.id.value).toBe(1);
         expect(editableInventoryDto.$.location.value).toBe(undefined);
         editableInventoryDto.$.location.onChange('San Diego');
         expect(editableInventoryDto.$.location.value).toBe('San Diego');
         editableInventoryDto.$.metadata.$!.key1.onChange('best choice');
         expect(editableInventoryDto.$.metadata.$!.key1.value).toBe('best choice');
-    
+
         expect(editableInventoryDto.$.metadata.$!.key3.value).toEqual([1, 2, 3]);
         expect(editableInventoryDto.$.metadata.$!.key3.$![0].value).toBe(1);
         expect(editableInventoryDto.$.metadata.$!.key3.$![2].value).toBe(3);
         editableInventoryDto.$.metadata.$!.key3.$![2].onChange(4);
         expect(editableInventoryDto.$.metadata.$!.key3.$![2].value).toBe(4);
-    
+
         editableInventoryDto.$.type.onChange(InventoryType.Jewelry);
         expect(editableInventoryDto.$.type.value).toBe(InventoryType.Jewelry);
-    
+
         const metadata: InventoryDto['metadata'] = {
             key0: true,
             key1: undefined,
@@ -66,7 +66,7 @@ describe('onChange', () => {
         };
         editableInventoryDto.$.metadata.onChange(metadata);
         expect(editableInventoryDto.$.metadata.value).toEqual(metadata);
-    
+
         editableInventoryDto.$.metadata.onChange(undefined);
         expect(() => editableInventoryDto.$.metadata.$!.key0).toThrow();
     });
@@ -102,7 +102,7 @@ describe('MobX', () => {
         editableInventoryDto.$.metadata.$!.key3.$![0].onChange(2);
         expect(result).toEqual([1, 2]);
     });
-    
+
     test('top level value is observing shallow changes', () => {
         const [, editableInventoryDto] = editableInventory();
         const result: string[] = [];
@@ -147,9 +147,7 @@ describe('MobX', () => {
         editableInventoryDto.$.metadata.$!.key3.$![0].onChange(2);
         expect(result).toEqual([1, 2]);
     });
-})
-
-
+});
 
 /* Type tests */
 enum E {

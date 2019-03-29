@@ -52,7 +52,7 @@ export function editable<T>(data: T): Editable<T> {
             }
             const value: { [key: string]: any } = {};
             entries(this.proxyValue).forEach(([key, proxy]) => {
-                value[key] = proxy.value
+                value[key] = proxy.value;
             });
             return value;
         },
