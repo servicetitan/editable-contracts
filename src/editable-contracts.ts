@@ -9,6 +9,17 @@ type DollarType<T> = {
     [P in keyof T]-?: Editable<T[P]>;
 };
 
+// TODO: implement proxy array to support push/splice with original values
+// type DollarType<T> = {
+//     [P in keyof T]-?: Editable<T[P]>;
+// } & (
+//     NonNullable<T> extends (infer U)[] ? (T extends NonNullable<T> ? ArrayType<U> : ArrayType<U> | undefined) : void
+// );
+
+// type ArrayType<T> = {
+//     push(value: T): void;
+// }
+
 type CompositeNode<T> = {
     $: NonNullable<T> extends T ? DollarType<T> :
         DollarType<T> | undefined;
