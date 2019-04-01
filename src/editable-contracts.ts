@@ -13,7 +13,7 @@ type DollarType<T> = {
 
 type ArrayType<T> = {
     push(value: T): void;
-}
+};
 
 type CompositeNode<T> = {
     $: NonNullable<T> extends T ? DollarType<T> :

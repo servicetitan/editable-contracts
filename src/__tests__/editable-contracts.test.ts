@@ -201,7 +201,7 @@ describe('MobX', () => {
     test('newly pushed array value is observable', () => {
         const [, editableInventoryDto] = editableInventory();
         const result: number[] = [];
-        
+
         editableInventoryDto.$.metadata.$!.key4.$!.push({ id: 2 });
         autorun(() => {
             result.push(editableInventoryDto.value.metadata!.key4![1].id);
