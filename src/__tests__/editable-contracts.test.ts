@@ -19,6 +19,9 @@ interface InventoryDto {
         key1?: string | undefined;
         key2?: number | undefined;
         key3?: number[] | undefined;
+        key4?: {
+            id: number
+        }[]
     };
 }
 
@@ -29,35 +32,70 @@ function editableInventory(): [InventoryDto, Editable<InventoryDto>] {
         name: 'ring',
         metadata: {
             key0: false,
-            key3: [1, 2, 3]
+            key3: [1, 2, 3],
+            key4: [{
+                id: 1
+            }]
         }
     };
     return [inventoryDto, editable(inventoryDto)];
 }
 
-describe('onChange', () => {
-    // TODO: split to multiple tests
-    test('editable', () => {
-        const [inventoryDto, editableInventoryDto] = editableInventory();
-
-        expect(editableInventoryDto.value).toEqual(inventoryDto);
+describe('Basic', () => {
+    test('Primitive values', () => {
+        const [, editableInventoryDto] = editableInventory();
 
         expect(editableInventoryDto.$.id.value).toBe(1);
         expect(editableInventoryDto.$.location.value).toBe(undefined);
+        expect(editableInventoryDto.$.metadata.$!.key3.$![0].value).toBe(1);
+    });
+
+    test('Nested array value', () => {
+        const [, editableInventoryDto] = editableInventory();
+        expect(editableInventoryDto.$.metadata.$!.key3.value).toEqual([1, 2, 3]);
+    });
+
+    test('Form value', () => {
+        const [inventoryDto, editableInventoryDto] = editableInventory();
+        expect(editableInventoryDto.value).toEqual(inventoryDto);
+    });
+
+    test('onChange individual values', () => {
+        const [, editableInventoryDto] = editableInventory();
+
+        expect(editableInventoryDto.$.id.value).toBe(1);
+        editableInventoryDto.$.id.onChange(2);
+        expect(editableInventoryDto.$.id.value).toBe(2);
+
+        expect(editableInventoryDto.$.location.value).toBe(undefined);
         editableInventoryDto.$.location.onChange('San Diego');
         expect(editableInventoryDto.$.location.value).toBe('San Diego');
+
+        editableInventoryDto.$.metadata.$!.key1.onChange(undefined);
         editableInventoryDto.$.metadata.$!.key1.onChange('best choice');
         expect(editableInventoryDto.$.metadata.$!.key1.value).toBe('best choice');
+    });
 
-        expect(editableInventoryDto.$.metadata.$!.key3.value).toEqual([1, 2, 3]);
-        expect(editableInventoryDto.$.metadata.$!.key3.$![0].value).toBe(1);
+    test('onChange & nested array values', () => {
+        const [, editableInventoryDto] = editableInventory();
+
         expect(editableInventoryDto.$.metadata.$!.key3.$![2].value).toBe(3);
         editableInventoryDto.$.metadata.$!.key3.$![2].onChange(4);
         expect(editableInventoryDto.$.metadata.$!.key3.$![2].value).toBe(4);
+    });
 
+    test('onChange & enum value', () => {
+        const [, editableInventoryDto] = editableInventory();
+
+        expect(editableInventoryDto.$.type.value).toBe(undefined);
         editableInventoryDto.$.type.onChange(InventoryType.Jewelry);
         expect(editableInventoryDto.$.type.value).toBe(InventoryType.Jewelry);
+    });
 
+    test('onChange object', () => {
+        const [inventoryDto, editableInventoryDto] = editableInventory();
+
+        expect(editableInventoryDto.$.metadata.value).toEqual(inventoryDto.metadata);
         const metadata: InventoryDto['metadata'] = {
             key0: true,
             key1: undefined,
@@ -66,6 +104,18 @@ describe('onChange', () => {
         };
         editableInventoryDto.$.metadata.onChange(metadata);
         expect(editableInventoryDto.$.metadata.value).toEqual(metadata);
+    });
+
+    test('onChange array', () => {
+        const [, editableInventoryDto] = editableInventory();
+
+        expect(editableInventoryDto.$.metadata.$!.key3.value).toEqual([1, 2, 3]);
+        editableInventoryDto.$.metadata.$!.key3.onChange([]);
+        expect(editableInventoryDto.$.metadata.$!.key3.value).toEqual([]);
+    });
+
+    test('onChange undefined nested value to throw', () => {
+        const [, editableInventoryDto] = editableInventory();
 
         editableInventoryDto.$.metadata.onChange(undefined);
         expect(() => editableInventoryDto.$.metadata.$!.key0).toThrow();
@@ -138,14 +188,27 @@ describe('MobX', () => {
         expect(result).toEqual([inventoryDto, newInventoryDto]);
     });
 
-    // test('array is observable', () => {
-    //     const [, editableInventoryDto] = editableInventory();
-    //     const result: number[][] = [];
-    //     autorun(() => {
-    //         result.push(editableInventoryDto.value.metadata!.key3!);
-    //     });
-    //     expect(result).toEqual([1, 2]);
-    // });
+    test('array is observable', () => {
+        const [, editableInventoryDto] = editableInventory();
+        const result: number[][] = [];
+        autorun(() => {
+            result.push(editableInventoryDto.value.metadata!.key4!.map(item => item.id));
+        });
+        editableInventoryDto.$.metadata.$!.key4.$!.push({ id: 2 });
+        expect(result).toEqual([[1], [1, 2]]);
+    });
+
+    test('newly pushed array value is observable', () => {
+        const [, editableInventoryDto] = editableInventory();
+        const result: number[] = [];
+        
+        editableInventoryDto.$.metadata.$!.key4.$!.push({ id: 2 });
+        autorun(() => {
+            result.push(editableInventoryDto.value.metadata!.key4![1].id);
+        });
+        editableInventoryDto.$.metadata.$!.key4.$![1].$.id.onChange(3);
+        expect(result).toEqual([2, 3]);
+    });
 });
 
 /* Type tests */
@@ -201,6 +264,8 @@ export interface Form {
 // form.$.Date.value
 // form.$.F.$![0].$.Nested.$!.C.value
 // form.$.F.$![0].$.Nested.$!.D.$![0].$.A.value
+// form.$.F.$![0].$.Nested.$!.D.$!.push(editable({ A: 1 }));
+// form.$.F.$![0].$.Nested.$!.D.$!.push({ A: 1 });
 // form.$.Q.value
 // form.$.D.onChange(['', 'asd'])
 // form.$.D.onChange([''])
@@ -213,10 +278,13 @@ export interface Form {
 // form.$.Obj.onChange({
 //     A: 2
 // })
+// form.$.D.$!.push('')
+// form.$.Arr.$.push('')
 // // errors
 // form.$.V.$![0].value.toUpperCase
 // form.$.W + 1
 // form.$.W.value + 1
+// form.$.D.$.push('')
 // // end errors
 // form.$.W.value! + 1
 // const a = form.$.D.$![0].value
@@ -237,3 +305,9 @@ export interface Form {
 
 // let form4 = editable<Date>(new Date());
 // form4.value.getDay
+
+// form.validators.push((form) => form.Date !== undefined)
+// form.$.Obj.$.A.validators.push((a, b) => {
+//     b.A
+//     return true;
+// })

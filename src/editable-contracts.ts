@@ -7,18 +7,13 @@ type Node<T> = {
 
 type DollarType<T> = {
     [P in keyof T]-?: Editable<T[P]>;
-};
+} & (
+    NonNullable<T> extends (infer U)[] ? (T extends NonNullable<T> ? ArrayType<U> : ArrayType<U> | undefined) : void
+);
 
-// TODO: implement proxy array to support push/splice with original values
-// type DollarType<T> = {
-//     [P in keyof T]-?: Editable<T[P]>;
-// } & (
-//     NonNullable<T> extends (infer U)[] ? (T extends NonNullable<T> ? ArrayType<U> : ArrayType<U> | undefined) : void
-// );
-
-// type ArrayType<T> = {
-//     push(value: T): void;
-// }
+type ArrayType<T> = {
+    push(value: T): void;
+}
 
 type CompositeNode<T> = {
     $: NonNullable<T> extends T ? DollarType<T> :
@@ -37,13 +32,24 @@ function isEditablePrimitive(obj?: any) {
     return Object(obj) !== obj || obj instanceof Date;
 }
 
+function createProxyArray(observableArray: any[]) {
+    return new Proxy(observableArray, {
+        get(obj, prop) {
+            if (prop === 'push') {
+                return (value: any) => obj.push(editable(value));
+            }
+            return (obj as any)[prop];
+        }
+    });
+}
+
 function createTargetValue<T>(data: T) {
     let val: any;
     if (isEditableObject(data)) {
         val = observable({}, undefined, { deep: false });
         Object.keys(data).forEach(key => val[key] = editable(data[key]));
     } else if (Array.isArray(data)) {
-        val = observable([], undefined, { deep: false });
+        val = createProxyArray(observable([], undefined, { deep: false }));
         data.forEach(value => val.push(editable(value)));
     } else {
         val = data;
@@ -51,7 +57,12 @@ function createTargetValue<T>(data: T) {
     return val;
 }
 
+const editables = new WeakSet();
+
 export function editable<T>(data: T): Editable<T> {
+    if (editables.has(data as any)) {
+        return data as any;
+    }
     const target = observable({
         proxyValue: createTargetValue(data),
         get value(): any {
@@ -98,5 +109,6 @@ export function editable<T>(data: T): Editable<T> {
             return obj.proxyValue[prop];
         }
     }) as any as Editable<T>;
+    editables.add(proxy);
     return proxy;
 }
