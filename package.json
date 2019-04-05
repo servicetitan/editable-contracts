@@ -1,9 +1,9 @@
 {
   "name": "editable-contracts",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "JSON driven editable contracts",
-  "main": "dist/src/editable-contracts.js",
-  "typings": "dist/src/editable-contracts.d.ts",
+  "main": "dist/editable-contracts.js",
+  "typings": "dist/editable-contracts.d.ts",
   "scripts": {
     "build": "tsc",
     "test": "jest --config jest.config.json",
