@@ -306,8 +306,27 @@ export interface Form {
 // let form4 = editable<Date>(new Date());
 // form4.value.getDay
 
-// form.validators.push((form) => form.Date !== undefined)
-// form.$.Obj.$.A.validators.push((a, b) => {
+// form.validators((form) => form.Date !== undefined)
+// form.$.Obj.$.A.validators((a, b) => {
+//     a
 //     b.A
 //     return true;
 // })
+// form.$.R.validators((r, parent) => {
+//     r!.A
+
+//     parent.Arr
+//     return true;
+// })
+// form.$.R.$!.Nested.$!.B.validators((a, b) => {
+//     b.$.B
+//     return true;
+// })
+// form.validators((a) => {
+//     return true;
+// })
+// // errors
+// form.validators((a, b) => {
+//     return true;
+// })
+// // end errors
