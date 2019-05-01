@@ -16,14 +16,6 @@
                 "ignoreComments": true
             }
         ],
-        "strict-boolean-expressions": [
-            true,
-            "allow-null-union",
-            "allow-undefined-union",
-            "allow-string",
-            "allow-boolean-or-undefined",
-            "allow-mix"
-        ],
         "variable-name": [true, "ban-keywords", "check-format", "allow-pascal-case"],
         "no-else-after-return": ["error", { "allowElseIf": true }],
         "curly": true,

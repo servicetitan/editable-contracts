@@ -53,6 +53,12 @@ describe('Basic', () => {
     test('Nested array value', () => {
         const [, editableInventoryDto] = editableInventory();
         expect(editableInventoryDto.$.metadata.$!.key3.value).toEqual([1, 2, 3]);
+        expect(editableInventoryDto.$.metadata.$!.key4.value![0]).toEqual({
+            id: 1
+        });
+        expect(editableInventoryDto.$.metadata.$!.key4.$![0].value).toEqual({
+            id: 1
+        });
     });
 
     test('Form value', () => {
@@ -208,6 +214,62 @@ describe('MobX', () => {
         });
         editableInventoryDto.$.metadata.$!.key4.$![1].$.id.onChange(3);
         expect(result).toEqual([2, 3]);
+    });
+});
+
+describe('Validation', () => {
+    test('Field validation', () => {
+        const [, editableInventoryDto] = editableInventory();
+        editableInventoryDto.$.age.validators(age => age >= 21 && '21+ only');
+        // expect(editableInventoryDto.hasError).toBe(false);
+        expect(editableInventoryDto.$.age.hasError).toBe(false);
+
+        editableInventoryDto.$.age.onChange(15);
+        // expect(editableInventoryDto.hasError).toBe(true);
+        expect(editableInventoryDto.$.age.hasError).toBe(true);
+
+        editableInventoryDto.$.age.onChange(25);
+        // expect(editableInventoryDto.hasError).toBe(false);
+        expect(editableInventoryDto.$.age.hasError).toBe(false);
+    });
+
+    test('Field validation with parent', () => {
+        const [, editableInventoryDto] = editableInventory();
+        editableInventoryDto.$.age.validators((age, dto) => dto.name === 'beer' ? age >= 21 && '21+ only' : age >= 5 && 'Not for kids');
+        expect(editableInventoryDto.$.age.hasError).toBe(false);
+
+        editableInventoryDto.$.age.onChange(15);
+        expect(editableInventoryDto.$.age.hasError).toBe(false);
+        editableInventoryDto.$.name.onChange('beer');
+        expect(editableInventoryDto.$.age.hasError).toBe(true);
+
+        editableInventoryDto.$.age.onChange(25);
+        expect(editableInventoryDto.$.age.hasError).toBe(false);
+
+        editableInventoryDto.$.age.onChange(15);
+        expect(editableInventoryDto.$.age.hasError).toBe(true);
+        editableInventoryDto.$.name.onChange('Pepsi');
+        expect(editableInventoryDto.$.age.hasError).toBe(false);
+
+        editableInventoryDto.$.age.onChange(4);
+        expect(editableInventoryDto.$.age.hasError).toBe(true);
+    });
+
+    test('Parent validation only tracks observed values', () => {
+        const [, editableInventoryDto] = editableInventory();
+        const validator = jest.fn((age: number, dto: InventoryDto) => dto.name === 'beer' ? age >= 21 && '21+ only' : age >= 5 && 'Not for kids');
+        editableInventoryDto.$.age.validators(validator);
+
+        // Simulate UI subscription
+        autorun(() => {
+            editableInventoryDto.$.age.hasError;
+        });
+
+        editableInventoryDto.$.age.onChange(2);
+        editableInventoryDto.$.name.onChange('Coca cola');
+        editableInventoryDto.$.location.onChange('LA');
+
+        expect(validator).toHaveBeenCalledTimes(2);
     });
 });
 

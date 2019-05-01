@@ -1,6 +1,12 @@
+// Tech debt list:
+// 1) Improve types (get rid of any's and casting)
+// 2) Remove $ and other props from non-composite nodes
+// 3) Check array parent type
+// 4) Autorun for hasError to support async validation and avoid performance issues
+
 import { observable, entries, set } from 'mobx';
 
-type Validator<T, TParent> = TParent extends undefined ? (value: T) => boolean | string : (value: T, form: TParent) => boolean | string;
+type Validator<T, TParent> = TParent extends undefined ? (value: T) => boolean | string : (value: T, parentValue: TParent) => boolean | string;
 
 type Node<T, TParent> = {
     value: T;
@@ -67,14 +73,14 @@ function createProxyArray(observableArray: any[]) {
     });
 }
 
-function createTargetValue<T>(data: T) {
+function createTargetValue<T, TParent = undefined>(data: T, editableParent?: TParent) {
     let val: any;
     if (isEditableObject(data)) {
         val = createProxyObject(observable({}, undefined, { deep: false }));
-        Object.keys(data).forEach(key => val[key] = editable(data[key]));
+        Object.keys(data).forEach(key => val[key] = editable(data[key], editableParent));
     } else if (Array.isArray(data)) {
         val = createProxyArray(observable([], undefined, { deep: false }));
-        data.forEach(value => val.push(editable(value)));
+        data.forEach(value => val.push(editable(value), editableParent));
     } else {
         val = data;
     }
@@ -83,13 +89,13 @@ function createTargetValue<T>(data: T) {
 
 const editables = new WeakSet();
 
-export function editable<T, TParent = undefined>(data: T, form?: TParent): Editable<T, TParent> {
+export function editable<T, TParent = undefined>(data: T, editableParent?: TParent): Editable<T, TParent> {
     if (editables.has(data as any)) {
         return data as any;
     }
 
     const editableObj = observable({
-        _value: createTargetValue(data),
+        _value: undefined as any,
         get $() {
             return this._value;
         },
@@ -112,10 +118,29 @@ export function editable<T, TParent = undefined>(data: T, form?: TParent): Edita
         },
         isDirty: false,
         _validators: [] as (Validator<T, TParent>[]),
+        validators(...validators: Validator<T, TParent>[]) {
+            this._validators = validators;
+        },
         get hasError(): boolean {
-            return this.isDirty ? this._validators.map(validator => validator(this.value, form!)).some(item => !item) : false;
+            return this.isDirty
+                ? this._validators
+                    .map(validator => validator(this.value, editableParent === undefined ? undefined : (editableParent as any).proxyToValue))
+                    .some(item => !item)
+                : false;
+        },
+        get proxyToValue() {
+            if (isEditablePrimitive(this._value)) {
+                return this._value;
+            }
+            return this._proxyToValue || (this._proxyToValue = new Proxy(this._value, {
+                get(target, prop) {
+                    return editables.has(target[prop]) ? target[prop].value : target[prop];
+                }
+            }));
         }
     });
+
+    editableObj._value = createTargetValue(data, editableObj);
 
     editables.add(editableObj);
 
