@@ -1,0 +1,42 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`DTO editing doesn't break editor Edit array manipulations. Replace. 1`] = `
+Array [
+  10,
+  11,
+]
+`;
+
+exports[`DTO editing doesn't break editor Edit array manipulations. Replace. 2`] = `
+Array [
+  11,
+  10,
+  7,
+]
+`;
+
+exports[`DTO editing doesn't break editor Edit array manipulations. Splice. 1`] = `
+Array [
+  7,
+  8,
+  9,
+  1,
+]
+`;
+
+exports[`DTO editing doesn't break editor Edit array manipulations. Splice. 2`] = `
+Array [
+  7,
+  1,
+  9,
+  6,
+]
+`;
+
+exports[`DTO editing doesn't break editor Edit array manipulations. Splice. 3`] = `
+Array [
+  7,
+  1,
+  10,
+]
+`;

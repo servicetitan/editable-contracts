@@ -1,148 +1,144 @@
-// Tech debt list:
-// 1) Improve types (get rid of any's and casting)
-// 2) Remove $ and other props from non-composite nodes
-// 3) Check array parent type
-// 4) Autorun for hasError to support async validation and avoid performance issues
-
-import { observable, entries, set } from 'mobx';
-
-type Validator<T, TParent> = TParent extends undefined ? (value: T) => boolean | string : (value: T, parentValue: TParent) => boolean | string;
-
-type Node<T, TParent> = {
-    value: T;
-    onChange(value: T): void;
-    hasError: boolean;
-    validators(...validators: Validator<T, TParent>[]): void
-};
-
-type DollarType<T> = {
-    [P in keyof T]-?: Editable<T[P], T>;
-} & (
-    NonNullable<T> extends (infer U)[] ? (T extends NonNullable<T> ? ArrayType<U> : ArrayType<U> | undefined) : void
-);
-
-type ArrayType<T> = {
-    push(value: T): void;
-};
-
-type CompositeNode<T, TParent> = {
-    $: NonNullable<T> extends T ? DollarType<T> :
-        DollarType<T> | undefined;
-} & Node<T, TParent>;
+import { isObservable, entries, observable, IObservableArray, IObservableObject, observe, transaction } from 'mobx';
 
 type PrimitiveType = string | number | boolean | Date;
 
-export type Editable<T, TParent = undefined> = NonNullable<T> extends PrimitiveType ? Node<T, TParent> : CompositeNode<T, TParent>;
+// Editor types
+type EditorNode<T, TParent> = {
+    onChange(value: T): void;
+    hasError: boolean;
+    validators(...validators: ValidatorFunction<T, TParent>[]): void
+};
 
-function isEditableObject(obj?: any): obj is object & { [key: string]: Node<any, any> } {
-    return !isEditablePrimitive(obj) && !Array.isArray(obj);
-}
+type EditorDollarType<T> = {
+    [P in keyof T]-?: Editor<T[P], T>;
+};
 
-function isEditablePrimitive(obj?: any) {
-    return Object(obj) !== obj || obj instanceof Date;
-}
+type EditorCompositeNode<T, TParent> = {
+    $: NonNullable<T> extends T ? EditorDollarType<T> :
+        EditorDollarType<T> | undefined;
+} & EditorNode<T, TParent>;
 
-function createProxyObject(observableObject: any) {
-    return new Proxy(observableObject, {
-        get(target, prop) {
-            if (typeof prop === 'symbol') {
-                return (target as any)[prop];
-            }
-            if (target === undefined) {
-                throw new Error(`Cannot read property '${prop.toString()}' of undefined`);
-            }
-            if (isEditablePrimitive(target)) {
-                throw new Error(`Cannot get property '${prop.toString()}' from primitive value`);
-            }
-            if (!(prop in target)) {
-                set(target, { [prop]: editable(undefined) });
-            }
-            return target[prop];
-        }
+export type Editor<T, TParent = undefined> = NonNullable<T> extends PrimitiveType ? EditorNode<T, TParent> : EditorCompositeNode<T, TParent>;
+
+// Validator types
+type ValidatorFunction<T, TParent> = TParent extends undefined
+    ? (value: T) => boolean | string
+    : (value: T, parentValue: TParent) => boolean | string;
+
+type ValidatorNode<T, TParent> = {
+    validator?: ValidatorFunction<T, TParent>
+};
+
+type ValidatorDollarType<T> = {
+    [P in keyof T]?: Validator<T[P], T>;
+};
+
+type ValidatorCompositeNode<T, TParent> = {
+    $?: NonNullable<T> extends T ? ValidatorDollarType<T> :
+        ValidatorDollarType<T> | undefined;
+} & ValidatorNode<T, TParent>;
+
+export type Validator<T, TParent = undefined> = NonNullable<T> extends PrimitiveType
+    ? ValidatorFunction<T, TParent>
+    : ValidatorCompositeNode<T, TParent>;
+
+type WithIndex<T> = T & { index: number };
+
+function deriveArray<T, TT>(
+    array: IObservableArray<T>,
+    deriveItem: (item: T, index: number) => WithIndex<TT>,
+    updateItem: (item: T, derivative: WithIndex<TT>) => WithIndex<TT>
+): IObservableArray<WithIndex<TT>> {
+    const derivative = observable.array<TT & { index: number }>([]);
+    transaction(() => {
+        array.forEach((item, index) => {
+            derivative.push(deriveItem(item, index));
+        });
     });
-}
-
-function createProxyArray(observableArray: any[]) {
-    return new Proxy(observableArray, {
-        get(obj, prop) {
-            if (prop === 'push') {
-                return (value: any) => obj.push(editable(value));
+    array.observe((changeData) => {
+        transaction(() => {
+            if (changeData.type === 'update') {
+                derivative[changeData.index] = updateItem(changeData.newValue, derivative[changeData.index]);
+                return;
             }
-            return (obj as any)[prop];
-        }
-    });
-}
-
-function createTargetValue<T, TParent = undefined>(data: T, editableParent?: TParent) {
-    let val: any;
-    if (isEditableObject(data)) {
-        val = createProxyObject(observable({}, undefined, { deep: false }));
-        Object.keys(data).forEach(key => val[key] = editable(data[key], editableParent));
-    } else if (Array.isArray(data)) {
-        val = createProxyArray(observable([], undefined, { deep: false }));
-        data.forEach(value => val.push(editable(value), editableParent));
-    } else {
-        val = data;
-    }
-    return val;
-}
-
-const editables = new WeakSet();
-
-export function editable<T, TParent = undefined>(data: T, editableParent?: TParent): Editable<T, TParent> {
-    if (editables.has(data as any)) {
-        return data as any;
-    }
-
-    const editableObj = observable({
-        _value: undefined as any,
-        get $() {
-            return this._value;
-        },
-        get value(): T {
-            if (isEditablePrimitive(this._value)) {
-                return this._value;
-            }
-            if (Array.isArray(this._value)) {
-                return this._value.map(item => item.value) as any;
-            }
-            const value: { [key: string]: any } = {};
-            entries(this._value).forEach(([key, proxy]) => {
-                value[key] = proxy.value;
+            derivative.splice(
+                changeData.index,
+                changeData.removedCount,
+                ...changeData.added.map((item, index) => deriveItem(item, changeData.index + index))
+            );
+            derivative.forEach((item, index) => {
+                item.index = index;
             });
-            return value as any;
-        },
-        onChange(value: T) {
-            this._value = createTargetValue(value);
-            this.isDirty = true;
-        },
-        isDirty: false,
-        _validators: [] as (Validator<T, TParent>[]),
-        validators(...validators: Validator<T, TParent>[]) {
-            this._validators = validators;
-        },
-        get hasError(): boolean {
-            return this.isDirty
-                ? this._validators
-                    .map(validator => validator(this.value, editableParent === undefined ? undefined : (editableParent as any).proxyToValue))
-                    .some(item => !item)
-                : false;
-        },
-        get proxyToValue() {
-            if (isEditablePrimitive(this._value)) {
-                return this._value;
+        });
+    });
+    return derivative;
+}
+
+function deriveObject<T>(
+    object: IObservableObject,
+    deriveItem: (item: any, key: string) => T,
+    updateItem: (item: any, derivative: T, key: string) => T
+) {
+    const derivative = observable.object({} as any);
+    transaction(() => {
+        entries(object).forEach(([key, value]) => {
+            derivative[key] = deriveItem(value, key);
+        });
+    });
+    observe(object, (change) => {
+        transaction(() => {
+            if (change.type === 'add' || change.type === 'update') {
+                derivative[change.name] = change.type === 'add' ? deriveItem(change.newValue, change.name) : updateItem(change.newValue, derivative[change.name], change.name);
+                return;
             }
-            return this._proxyToValue || (this._proxyToValue = new Proxy(this._value, {
-                get(target, prop) {
-                    return editables.has(target[prop]) ? target[prop].value : target[prop];
+            delete derivative[change.name];
+        });
+    });
+    return derivative;
+}
+
+export function editor<T extends {} | any[], TParent = undefined>(contract: T, validator?: Validator<T, TParent>): Editor<T, TParent> {
+    if (!isObservable(contract)) {
+        throw 'Contract object has to be observable.';
+    }
+
+    let contractEditor: any;
+    if (Array.isArray(contract)) {
+        contractEditor = deriveArray(contract as any as IObservableArray<any>, (_0, index) => {
+            return {
+                index,
+                onChange(value: any) {
+                    contract[this.index] = value;
+                },
+                get $() {
+                    // TODO: check if caching is not needed
+                    return (editor((contract as any as IObservableArray<any>)[this.index]) as any).$;
                 }
-            }));
+            };
+        },                           (_0, derivative) => derivative);
+    } else {
+        contractEditor = deriveObject(contract as any as IObservableObject, (_0, key) => {
+            return {
+                onChange(value: any) {
+                    (contract as any)[key] = value;
+                },
+                get $() {
+                    // TODO: check if caching is not needed
+                    return (editor((contract as any)[key]) as any).$;
+                }
+            };
+        },                            (_0, derivative) => derivative);
+    }
+
+    const proxy = new Proxy(contractEditor, {
+        get(target, p: any) {
+            if (!target.hasOwnProperty(p)) {
+                (contract as any)[p] = undefined;
+            }
+            return target[p];
         }
     });
 
-    editableObj._value = createTargetValue(data, editableObj);
-
-    editables.add(editableObj);
-
-    return editableObj as any as Editable<T, TParent>;
+    // TODO: improve Editor type to return object editor without shallow $
+    return { $: proxy } as any as Editor<T, TParent>;
 }

@@ -1,5 +1,5 @@
-import { editable, Editable } from '../editable-contracts';
-import { autorun } from 'mobx';
+import { Editor, editor } from '../editable-contracts';
+import { observable } from 'mobx';
 
 enum InventoryType {
     Furniture,
@@ -25,8 +25,8 @@ interface InventoryDto {
     };
 }
 
-function editableInventory(): [InventoryDto, Editable<InventoryDto>] {
-    const inventoryDto: InventoryDto = {
+function editableInventory(): [InventoryDto, Editor<InventoryDto>] {
+    const inventoryDto: InventoryDto = observable({
         id: 1,
         age: 100,
         name: 'ring',
@@ -37,87 +37,103 @@ function editableInventory(): [InventoryDto, Editable<InventoryDto>] {
                 id: 1
             }]
         }
-    };
-    return [inventoryDto, editable(inventoryDto)];
+    });
+
+    return [inventoryDto, editor(inventoryDto, {
+        validator: () => true,
+        $: {
+            id: () => true,
+            count: () => true,
+            metadata: {
+                validator: () => true,
+                $: {
+                    key0: () => true,
+                    key3: {
+                        validator: () => true,
+                        $: [() => true]
+                    },
+                    key4: {
+                        validator: () => true,
+                        $: [{
+                            validator: () => true,
+                            $: {
+                                id: () => true
+                            }
+                        }]
+                    }
+                }
+            }
+        }
+    })];
 }
 
-describe('Basic', () => {
-    test('Primitive values', () => {
-        const [, editableInventoryDto] = editableInventory();
+describe('Basic editor usages', () => {
+    test('Shallow primitive value change', () => {
+        const [inventoryDto, inventoryDtoEditor] = editableInventory();
 
-        expect(editableInventoryDto.$.id.value).toBe(1);
-        expect(editableInventoryDto.$.location.value).toBe(undefined);
-        expect(editableInventoryDto.$.metadata.$!.key3.$![0].value).toBe(1);
+        expect(inventoryDto.id).toBe(1);
+        inventoryDtoEditor.$.id.onChange(2);
+        expect(inventoryDto.id).toBe(2);
     });
 
-    test('Nested array value', () => {
-        const [, editableInventoryDto] = editableInventory();
-        expect(editableInventoryDto.$.metadata.$!.key3.value).toEqual([1, 2, 3]);
-        expect(editableInventoryDto.$.metadata.$!.key4.value![0]).toEqual({
+    test('Undefined value change', () => {
+        const [inventoryDto, inventoryDtoEditor] = editableInventory();
+
+        expect(inventoryDto.type).toBe(undefined);
+        inventoryDtoEditor.$.type.onChange(InventoryType.Electronics);
+        expect(inventoryDto.type).toBe(InventoryType.Electronics);
+    });
+
+    test('Deep primitive value change', () => {
+        const [inventoryDto, inventoryDtoEditor] = editableInventory();
+
+        expect(inventoryDto.metadata!.key0).toBe(false);
+        inventoryDtoEditor.$.metadata.$!.key0.onChange(true);
+        expect(inventoryDto.metadata!.key0).toBe(true);
+    });
+
+    test('Deep primitive undefined value change', () => {
+        const [inventoryDto, inventoryDtoEditor] = editableInventory();
+
+        expect(inventoryDto.metadata!.key1).toBe(undefined);
+        inventoryDtoEditor.$.metadata.$!.key1.onChange('');
+        expect(inventoryDto.metadata!.key1).toBe('');
+    });
+
+    test('Object value change', () => {
+        const [inventoryDto, inventoryDtoEditor] = editableInventory();
+
+        inventoryDtoEditor.$.metadata.onChange({
+            key0: true
+        });
+        expect(inventoryDto.metadata!.key0).toBe(true);
+        inventoryDtoEditor.$.metadata.$!.key0.onChange(false);
+        expect(inventoryDto.metadata!.key0).toBe(false);
+    });
+
+    test('Object value change', () => {
+        const [inventoryDto, inventoryDtoEditor] = editableInventory();
+
+        inventoryDtoEditor.$.metadata.onChange({
+            key0: true
+        });
+        expect(inventoryDto.metadata!.key0).toBe(true);
+        inventoryDtoEditor.$.metadata.$!.key0.onChange(false);
+        expect(inventoryDto.metadata!.key0).toBe(false);
+    });
+
+    test('Array element value change', () => {
+        const [inventoryDto, inventoryDtoEditor] = editableInventory();
+
+        expect(inventoryDto.metadata!.key4![0]).toEqual({
             id: 1
         });
-        expect(editableInventoryDto.$.metadata.$!.key4.$![0].value).toEqual({
-            id: 1
+        inventoryDtoEditor.$.metadata.$!.key4.$![0].onChange({
+            id: 2
         });
-    });
-
-    test('Form value', () => {
-        const [inventoryDto, editableInventoryDto] = editableInventory();
-        expect(editableInventoryDto.value).toEqual(inventoryDto);
-    });
-
-    test('onChange individual values', () => {
-        const [, editableInventoryDto] = editableInventory();
-
-        expect(editableInventoryDto.$.id.value).toBe(1);
-        editableInventoryDto.$.id.onChange(2);
-        expect(editableInventoryDto.$.id.value).toBe(2);
-
-        expect(editableInventoryDto.$.location.value).toBe(undefined);
-        editableInventoryDto.$.location.onChange('San Diego');
-        expect(editableInventoryDto.$.location.value).toBe('San Diego');
-
-        editableInventoryDto.$.metadata.$!.key1.onChange(undefined);
-        editableInventoryDto.$.metadata.$!.key1.onChange('best choice');
-        expect(editableInventoryDto.$.metadata.$!.key1.value).toBe('best choice');
-    });
-
-    test('onChange & nested array values', () => {
-        const [, editableInventoryDto] = editableInventory();
-
-        expect(editableInventoryDto.$.metadata.$!.key3.$![2].value).toBe(3);
-        editableInventoryDto.$.metadata.$!.key3.$![2].onChange(4);
-        expect(editableInventoryDto.$.metadata.$!.key3.$![2].value).toBe(4);
-    });
-
-    test('onChange & enum value', () => {
-        const [, editableInventoryDto] = editableInventory();
-
-        expect(editableInventoryDto.$.type.value).toBe(undefined);
-        editableInventoryDto.$.type.onChange(InventoryType.Jewelry);
-        expect(editableInventoryDto.$.type.value).toBe(InventoryType.Jewelry);
-    });
-
-    test('onChange object', () => {
-        const [inventoryDto, editableInventoryDto] = editableInventory();
-
-        expect(editableInventoryDto.$.metadata.value).toEqual(inventoryDto.metadata);
-        const metadata: InventoryDto['metadata'] = {
-            key0: true,
-            key1: undefined,
-            key2: 123,
-            key3: [1]
-        };
-        editableInventoryDto.$.metadata.onChange(metadata);
-        expect(editableInventoryDto.$.metadata.value).toEqual(metadata);
-    });
-
-    test('onChange array', () => {
-        const [, editableInventoryDto] = editableInventory();
-
-        expect(editableInventoryDto.$.metadata.$!.key3.value).toEqual([1, 2, 3]);
-        editableInventoryDto.$.metadata.$!.key3.onChange([]);
-        expect(editableInventoryDto.$.metadata.$!.key3.value).toEqual([]);
+        expect(inventoryDto.metadata!.key4![0]).toEqual({
+            id: 2
+        });
     });
 
     test('onChange undefined nested value to throw', () => {
@@ -128,187 +144,465 @@ describe('Basic', () => {
     });
 });
 
-describe('MobX', () => {
-    test('shallow prop is observable', () => {
-        const [, editableInventoryDto] = editableInventory();
-        const result: string[] = [];
-        autorun(() => {
-            result.push(editableInventoryDto.$.name.value);
-        });
-        editableInventoryDto.$.name.onChange('necklace');
-        expect(result).toEqual(['ring', 'necklace']);
+describe('DTO editing doesn\'t break editor', () => {
+    test('Edit primitive value', () => {
+        const [inventoryDto, inventoryDtoEditor] = editableInventory();
+
+        expect(inventoryDto.id).toBe(1);
+        inventoryDto.id = 2;
+        expect(inventoryDto.id).toBe(2);
+        inventoryDtoEditor.$.id.onChange(1);
+        expect(inventoryDto.id).toBe(1);
     });
 
-    test('deep prop is observable', () => {
-        const [, editableInventoryDto] = editableInventory();
-        const result: (string | undefined)[] = [];
-        autorun(() => {
-            result.push(editableInventoryDto.$.metadata.$!.key1.value);
-        });
-        editableInventoryDto.$.metadata.$!.key1.onChange('necklace');
-        expect(result).toEqual([undefined, 'necklace']);
-    });
+    test('Edit object value', () => {
+        const [inventoryDto, inventoryDtoEditor] = editableInventory();
 
-    test('deep array prop is observable', () => {
-        const [, editableInventoryDto] = editableInventory();
-        const result: number[] = [];
-        autorun(() => {
-            result.push(editableInventoryDto.$.metadata.$!.key3.$![0].value);
-        });
-        editableInventoryDto.$.metadata.$!.key3.$![0].onChange(2);
-        expect(result).toEqual([1, 2]);
-    });
-
-    test('top level value is observing shallow changes', () => {
-        const [, editableInventoryDto] = editableInventory();
-        const result: string[] = [];
-        autorun(() => {
-            result.push(editableInventoryDto.value.name);
-        });
-        editableInventoryDto.$.name.onChange('necklace');
-        expect(result).toEqual(['ring', 'necklace']);
-    });
-
-    test('top level value is observing deep changes', () => {
-        const [, editableInventoryDto] = editableInventory();
-        const result: number[] = [];
-        autorun(() => {
-            result.push(editableInventoryDto.value.metadata!.key3![0]);
-        });
-        editableInventoryDto.$.metadata.$!.key3.$![0].onChange(2);
-        expect(result).toEqual([1, 2]);
-    });
-
-    test('top level value is observing top level changes', () => {
-        const [inventoryDto, editableInventoryDto] = editableInventory();
-        const result: InventoryDto[] = [];
-        autorun(() => {
-            result.push(editableInventoryDto.value);
-        });
-        const newInventoryDto = {
-            id: 2,
-            age: 10,
-            name: 'table'
+        inventoryDto.metadata = {
+            key0: true
         };
-        editableInventoryDto.onChange(newInventoryDto);
-        expect(result).toEqual([inventoryDto, newInventoryDto]);
+        inventoryDtoEditor.$.metadata.$!.key0.onChange(false);
+        expect(inventoryDto.metadata.key0).toBe(false);
+
+        inventoryDtoEditor.$.metadata.$!.key1.onChange('');
+        expect(inventoryDto.metadata.key1).toBe('');
     });
 
-    test('array is observable', () => {
-        const [, editableInventoryDto] = editableInventory();
-        const result: number[][] = [];
-        autorun(() => {
-            result.push(editableInventoryDto.value.metadata!.key4!.map(item => item.id));
+    test('Edit array value', () => {
+        const [inventoryDto, inventoryDtoEditor] = editableInventory();
+
+        inventoryDto.metadata!.key4![0] = {
+            id: 2
+        };
+        inventoryDtoEditor.$.metadata.$!.key4.$![0].onChange({
+            id: 1
         });
-        editableInventoryDto.$.metadata.$!.key4.$!.push({ id: 2 });
-        expect(result).toEqual([[1], [1, 2]]);
+        expect(inventoryDto.metadata!.key4![0]).toEqual({
+            id: 1
+        });
     });
 
-    test('newly pushed array value is observable', () => {
-        const [, editableInventoryDto] = editableInventory();
-        const result: number[] = [];
+    test('Edit array undefined value', () => {
+        const [inventoryDto, inventoryDtoEditor] = editableInventory();
 
-        editableInventoryDto.$.metadata.$!.key4.$!.push({ id: 2 });
-        autorun(() => {
-            result.push(editableInventoryDto.value.metadata!.key4![1].id);
+        expect(inventoryDto.metadata!.key4![1]).toEqual(undefined);
+        inventoryDto.metadata!.key4![1] = {
+            id: 2
+        };
+        inventoryDtoEditor.$.metadata.$!.key4.$![1].onChange({
+            id: 1
         });
-        editableInventoryDto.$.metadata.$!.key4.$![1].$.id.onChange(3);
-        expect(result).toEqual([2, 3]);
+        expect(inventoryDto.metadata!.key4![1]).toEqual({
+            id: 1
+        });
+    });
+
+    test('Edit array manipulations. Push.', () => {
+        const [inventoryDto, inventoryDtoEditor] = editableInventory();
+
+        inventoryDto.metadata!.key4!.push({
+            id: 2
+        });
+        inventoryDtoEditor.$.metadata.$!.key4.$![1].onChange({
+            id: 1
+        });
+        expect(inventoryDto.metadata!.key4![1]).toEqual({
+            id: 1
+        });
+    });
+
+    test('Edit array manipulations. Unshift.', () => {
+        const [inventoryDto, inventoryDtoEditor] = editableInventory();
+
+        inventoryDtoEditor.$.metadata.$!.key4.$![0].onChange({
+            id: 99
+        });
+
+        inventoryDto.metadata!.key4!.unshift({
+            id: 2
+        });
+
+        inventoryDtoEditor.$.metadata.$!.key4.$![0].onChange({
+            id: 1
+        });
+        expect(inventoryDto.metadata!.key4![0]).toEqual({
+            id: 1
+        });
+
+        inventoryDtoEditor.$.metadata.$!.key4.$![1].onChange({
+            id: 4
+        });
+        expect(inventoryDto.metadata!.key4![1]).toEqual({
+            id: 4
+        });
+    });
+
+    test('Edit array manipulations. Splice.', () => {
+        const [inventoryDto, inventoryDtoEditor] = editableInventory();
+
+        inventoryDto.metadata!.key4!.splice(0, 0, {
+            id: 7
+        },                                  {
+            id: 8
+        },                                  {
+            id: 9
+        });
+
+        expect(inventoryDto.metadata!.key4!.map(item => item.id)).toMatchSnapshot();
+
+        inventoryDtoEditor.$.metadata.$!.key4.$![1].onChange({
+            id: 1
+        });
+        inventoryDtoEditor.$.metadata.$!.key4.$![3].onChange({
+            id: 6
+        });
+        expect(inventoryDto.metadata!.key4!.map(item => item.id)).toMatchSnapshot();
+
+        inventoryDto.metadata!.key4!.splice(2, 1);
+
+        inventoryDtoEditor.$.metadata.$!.key4.$![2].onChange({
+            id: 10
+        });
+        expect(inventoryDto.metadata!.key4!.map(item => item.id)).toMatchSnapshot();
+    });
+
+    test('Edit array manipulations. Replace.', () => {
+        const [inventoryDto, inventoryDtoEditor] = editableInventory();
+
+        inventoryDto.metadata!.key4!.push({ id: 5 });
+        inventoryDtoEditor.$.metadata.$!.key4.$![0].onChange({
+            id: 10
+        });
+        inventoryDtoEditor.$.metadata.$!.key4.$![1].onChange({
+            id: 11
+        });
+
+        expect(inventoryDto.metadata!.key4!.map(item => item.id)).toMatchSnapshot();
+
+        inventoryDto.metadata!.key4 = [9, 8, 7].map(item => ({ id: item }));
+
+        inventoryDtoEditor.$.metadata.$!.key4.$![1].onChange({
+            id: 10
+        });
+        inventoryDtoEditor.$.metadata.$!.key4.$![0].onChange({
+            id: 11
+        });
+
+        expect(inventoryDto.metadata!.key4!.map(item => item.id)).toMatchSnapshot();
     });
 });
 
-describe('Validation', () => {
-    test('Field validation', () => {
-        const [, editableInventoryDto] = editableInventory();
-        editableInventoryDto.$.age.validators(age => age >= 21 && '21+ only');
-        // expect(editableInventoryDto.hasError).toBe(false);
-        expect(editableInventoryDto.$.age.hasError).toBe(false);
+// import { editable, Editor } from '../editable-contracts';
+// import { autorun } from 'mobx';
 
-        editableInventoryDto.$.age.onChange(15);
-        // expect(editableInventoryDto.hasError).toBe(true);
-        expect(editableInventoryDto.$.age.hasError).toBe(true);
+// enum InventoryType {
+//     Furniture,
+//     Electronics,
+//     Tools,
+//     Jewelry
+// }
+// interface InventoryDto {
+//     id: number;
+//     age: number;
+//     name: string;
+//     type?: InventoryType | undefined;
+//     location?: string | undefined;
+//     count?: number | undefined;
+//     metadata?: {
+//         key0: boolean;
+//         key1?: string | undefined;
+//         key2?: number | undefined;
+//         key3?: number[] | undefined;
+//         key4?: {
+//             id: number
+//         }[]
+//     };
+// }
 
-        editableInventoryDto.$.age.onChange(25);
-        // expect(editableInventoryDto.hasError).toBe(false);
-        expect(editableInventoryDto.$.age.hasError).toBe(false);
-    });
+// function editableInventory(): [InventoryDto, Editor<InventoryDto>] {
+//     const inventoryDto: InventoryDto = {
+//         id: 1,
+//         age: 100,
+//         name: 'ring',
+//         metadata: {
+//             key0: false,
+//             key3: [1, 2, 3],
+//             key4: [{
+//                 id: 1
+//             }]
+//         }
+//     };
+//     return [inventoryDto, editable(inventoryDto)];
+// }
 
-    test('Field validation with parent', () => {
-        const [, editableInventoryDto] = editableInventory();
-        editableInventoryDto.$.age.validators((age, dto) => dto.name === 'beer' ? age >= 21 && '21+ only' : age >= 5 && 'Not for kids');
-        expect(editableInventoryDto.$.age.hasError).toBe(false);
+// describe('Basic', () => {
+//     test('Primitive values', () => {
+//         const [, editableInventoryDto] = editableInventory();
 
-        editableInventoryDto.$.age.onChange(15);
-        expect(editableInventoryDto.$.age.hasError).toBe(false);
-        editableInventoryDto.$.name.onChange('beer');
-        expect(editableInventoryDto.$.age.hasError).toBe(true);
+//         expect(editableInventoryDto.$.id.value).toBe(1);
+//         expect(editableInventoryDto.$.location.value).toBe(undefined);
+//         expect(editableInventoryDto.$.metadata.$!.key3.$![0].value).toBe(1);
+//     });
 
-        editableInventoryDto.$.age.onChange(25);
-        expect(editableInventoryDto.$.age.hasError).toBe(false);
+//     test('Nested array value', () => {
+//         const [, editableInventoryDto] = editableInventory();
+//         expect(editableInventoryDto.$.metadata.$!.key3.value).toEqual([1, 2, 3]);
+//         expect(editableInventoryDto.$.metadata.$!.key4.value![0]).toEqual({
+//             id: 1
+//         });
+//         expect(editableInventoryDto.$.metadata.$!.key4.$![0].value).toEqual({
+//             id: 1
+//         });
+//     });
 
-        editableInventoryDto.$.age.onChange(15);
-        expect(editableInventoryDto.$.age.hasError).toBe(true);
-        editableInventoryDto.$.name.onChange('Pepsi');
-        expect(editableInventoryDto.$.age.hasError).toBe(false);
+//     test('Form value', () => {
+//         const [inventoryDto, editableInventoryDto] = editableInventory();
+//         expect(editableInventoryDto.value).toEqual(inventoryDto);
+//     });
 
-        editableInventoryDto.$.age.onChange(4);
-        expect(editableInventoryDto.$.age.hasError).toBe(true);
-    });
+//     test('onChange individual values', () => {
+//         const [, editableInventoryDto] = editableInventory();
 
-    test('Parent validation only tracks observed values', () => {
-        const [, editableInventoryDto] = editableInventory();
-        const validator = jest.fn((age: number, dto: InventoryDto) => dto.name === 'beer' ? age >= 21 && '21+ only' : age >= 5 && 'Not for kids');
-        editableInventoryDto.$.age.validators(validator);
+//         expect(editableInventoryDto.$.id.value).toBe(1);
+//         editableInventoryDto.$.id.onChange(2);
+//         expect(editableInventoryDto.$.id.value).toBe(2);
 
-        // Simulate UI subscription
-        autorun(() => {
-            editableInventoryDto.$.age.hasError;
-        });
+//         expect(editableInventoryDto.$.location.value).toBe(undefined);
+//         editableInventoryDto.$.location.onChange('San Diego');
+//         expect(editableInventoryDto.$.location.value).toBe('San Diego');
 
-        editableInventoryDto.$.age.onChange(2);
-        editableInventoryDto.$.name.onChange('Coca cola');
-        editableInventoryDto.$.location.onChange('LA');
+//         editableInventoryDto.$.metadata.$!.key1.onChange(undefined);
+//         editableInventoryDto.$.metadata.$!.key1.onChange('best choice');
+//         expect(editableInventoryDto.$.metadata.$!.key1.value).toBe('best choice');
+//     });
 
-        expect(validator).toHaveBeenCalledTimes(2);
-    });
-});
+//     test('onChange & nested array values', () => {
+//         const [, editableInventoryDto] = editableInventory();
 
-/* Type tests */
-enum E {
-    A, B, C
-}
+//         expect(editableInventoryDto.$.metadata.$!.key3.$![2].value).toBe(3);
+//         editableInventoryDto.$.metadata.$!.key3.$![2].onChange(4);
+//         expect(editableInventoryDto.$.metadata.$!.key3.$![2].value).toBe(4);
+//     });
 
-export interface Form {
-    Q?: E | undefined;
-    W?: number | undefined;
-    D?: string[] | undefined;
-    V?: (string | undefined)[] | undefined;
-    R?: {
-        A: number,
-        Nested?: {
-            B?: string | undefined,
-            C?: number[] | undefined,
-            D?: {
-                A: number;
-            }[] | undefined
-        } | undefined
-    } | undefined;
-    F?: {
-        A: number,
-        Nested?: {
-            B?: string | undefined,
-            C?: number[] | undefined,
-            D?: {
-                A: number;
-            }[] | undefined
-        } | undefined
-    }[] | undefined;
-    Date: Date;
-    Arr: string[];
-    Obj: {
-        A: number
-    };
-}
+//     test('onChange & enum value', () => {
+//         const [, editableInventoryDto] = editableInventory();
+
+//         expect(editableInventoryDto.$.type.value).toBe(undefined);
+//         editableInventoryDto.$.type.onChange(InventoryType.Jewelry);
+//         expect(editableInventoryDto.$.type.value).toBe(InventoryType.Jewelry);
+//     });
+
+//     test('onChange object', () => {
+//         const [inventoryDto, editableInventoryDto] = editableInventory();
+
+//         expect(editableInventoryDto.$.metadata.value).toEqual(inventoryDto.metadata);
+//         const metadata: InventoryDto['metadata'] = {
+//             key0: true,
+//             key1: undefined,
+//             key2: 123,
+//             key3: [1]
+//         };
+//         editableInventoryDto.$.metadata.onChange(metadata);
+//         expect(editableInventoryDto.$.metadata.value).toEqual(metadata);
+//     });
+
+//     test('onChange array', () => {
+//         const [, editableInventoryDto] = editableInventory();
+
+//         expect(editableInventoryDto.$.metadata.$!.key3.value).toEqual([1, 2, 3]);
+//         editableInventoryDto.$.metadata.$!.key3.onChange([]);
+//         expect(editableInventoryDto.$.metadata.$!.key3.value).toEqual([]);
+//     });
+
+//     test('onChange undefined nested value to throw', () => {
+//         const [, editableInventoryDto] = editableInventory();
+
+//         editableInventoryDto.$.metadata.onChange(undefined);
+//         expect(() => editableInventoryDto.$.metadata.$!.key0).toThrow();
+//     });
+// });
+
+// describe('MobX', () => {
+//     test('shallow prop is observable', () => {
+//         const [, editableInventoryDto] = editableInventory();
+//         const result: string[] = [];
+//         autorun(() => {
+//             result.push(editableInventoryDto.$.name.value);
+//         });
+//         editableInventoryDto.$.name.onChange('necklace');
+//         expect(result).toEqual(['ring', 'necklace']);
+//     });
+
+//     test('deep prop is observable', () => {
+//         const [, editableInventoryDto] = editableInventory();
+//         const result: (string | undefined)[] = [];
+//         autorun(() => {
+//             result.push(editableInventoryDto.$.metadata.$!.key1.value);
+//         });
+//         editableInventoryDto.$.metadata.$!.key1.onChange('necklace');
+//         expect(result).toEqual([undefined, 'necklace']);
+//     });
+
+//     test('deep array prop is observable', () => {
+//         const [, editableInventoryDto] = editableInventory();
+//         const result: number[] = [];
+//         autorun(() => {
+//             result.push(editableInventoryDto.$.metadata.$!.key3.$![0].value);
+//         });
+//         editableInventoryDto.$.metadata.$!.key3.$![0].onChange(2);
+//         expect(result).toEqual([1, 2]);
+//     });
+
+//     test('top level value is observing shallow changes', () => {
+//         const [, editableInventoryDto] = editableInventory();
+//         const result: string[] = [];
+//         autorun(() => {
+//             result.push(editableInventoryDto.value.name);
+//         });
+//         editableInventoryDto.$.name.onChange('necklace');
+//         expect(result).toEqual(['ring', 'necklace']);
+//     });
+
+//     test('top level value is observing deep changes', () => {
+//         const [, editableInventoryDto] = editableInventory();
+//         const result: number[] = [];
+//         autorun(() => {
+//             result.push(editableInventoryDto.value.metadata!.key3![0]);
+//         });
+//         editableInventoryDto.$.metadata.$!.key3.$![0].onChange(2);
+//         expect(result).toEqual([1, 2]);
+//     });
+
+//     test('top level value is observing top level changes', () => {
+//         const [inventoryDto, editableInventoryDto] = editableInventory();
+//         const result: InventoryDto[] = [];
+//         autorun(() => {
+//             result.push(editableInventoryDto.value);
+//         });
+//         const newInventoryDto = {
+//             id: 2,
+//             age: 10,
+//             name: 'table'
+//         };
+//         editableInventoryDto.onChange(newInventoryDto);
+//         expect(result).toEqual([inventoryDto, newInventoryDto]);
+//     });
+
+//     test('array is observable', () => {
+//         const [, editableInventoryDto] = editableInventory();
+//         const result: number[][] = [];
+//         autorun(() => {
+//             result.push(editableInventoryDto.value.metadata!.key4!.map(item => item.id));
+//         });
+//         editableInventoryDto.$.metadata.$!.key4.$!.push({ id: 2 });
+//         expect(result).toEqual([[1], [1, 2]]);
+//     });
+
+//     test('newly pushed array value is observable', () => {
+//         const [, editableInventoryDto] = editableInventory();
+//         const result: number[] = [];
+
+//         editableInventoryDto.$.metadata.$!.key4.$!.push({ id: 2 });
+//         autorun(() => {
+//             result.push(editableInventoryDto.value.metadata!.key4![1].id);
+//         });
+//         editableInventoryDto.$.metadata.$!.key4.$![1].$.id.onChange(3);
+//         expect(result).toEqual([2, 3]);
+//     });
+// });
+
+// describe('Validation', () => {
+//     test('Field validation', () => {
+//         const [, editableInventoryDto] = editableInventory();
+//         editableInventoryDto.$.age.validators(age => age >= 21 && '21+ only');
+//         // expect(editableInventoryDto.hasError).toBe(false);
+//         expect(editableInventoryDto.$.age.hasError).toBe(false);
+
+//         editableInventoryDto.$.age.onChange(15);
+//         // expect(editableInventoryDto.hasError).toBe(true);
+//         expect(editableInventoryDto.$.age.hasError).toBe(true);
+
+//         editableInventoryDto.$.age.onChange(25);
+//         // expect(editableInventoryDto.hasError).toBe(false);
+//         expect(editableInventoryDto.$.age.hasError).toBe(false);
+//     });
+
+//     test('Field validation with parent', () => {
+//         const [, editableInventoryDto] = editableInventory();
+//         editableInventoryDto.$.age.validators((age, dto) => dto.name === 'beer' ? age >= 21 && '21+ only' : age >= 5 && 'Not for kids');
+//         expect(editableInventoryDto.$.age.hasError).toBe(false);
+
+//         editableInventoryDto.$.age.onChange(15);
+//         expect(editableInventoryDto.$.age.hasError).toBe(false);
+//         editableInventoryDto.$.name.onChange('beer');
+//         expect(editableInventoryDto.$.age.hasError).toBe(true);
+
+//         editableInventoryDto.$.age.onChange(25);
+//         expect(editableInventoryDto.$.age.hasError).toBe(false);
+
+//         editableInventoryDto.$.age.onChange(15);
+//         expect(editableInventoryDto.$.age.hasError).toBe(true);
+//         editableInventoryDto.$.name.onChange('Pepsi');
+//         expect(editableInventoryDto.$.age.hasError).toBe(false);
+
+//         editableInventoryDto.$.age.onChange(4);
+//         expect(editableInventoryDto.$.age.hasError).toBe(true);
+//     });
+
+//     test('Parent validation only tracks observed values', () => {
+//         const [, editableInventoryDto] = editableInventory();
+//         const validator = jest.fn((age: number, dto: InventoryDto) => dto.name === 'beer' ? age >= 21 && '21+ only' : age >= 5 && 'Not for kids');
+//         editableInventoryDto.$.age.validators(validator);
+
+//         // Simulate UI subscription
+//         autorun(() => {
+//             editableInventoryDto.$.age.hasError;
+//         });
+
+//         editableInventoryDto.$.age.onChange(2);
+//         editableInventoryDto.$.name.onChange('Coca cola');
+//         editableInventoryDto.$.location.onChange('LA');
+
+//         expect(validator).toHaveBeenCalledTimes(2);
+//     });
+// });
+
+// /* Type tests */
+// enum E {
+//     A, B, C
+// }
+
+// export interface Form {
+//     Q?: E | undefined;
+//     W?: number | undefined;
+//     D?: string[] | undefined;
+//     V?: (string | undefined)[] | undefined;
+//     R?: {
+//         A: number,
+//         Nested?: {
+//             B?: string | undefined,
+//             C?: number[] | undefined,
+//             D?: {
+//                 A: number;
+//             }[] | undefined
+//         } | undefined
+//     } | undefined;
+//     F?: {
+//         A: number,
+//         Nested?: {
+//             B?: string | undefined,
+//             C?: number[] | undefined,
+//             D?: {
+//                 A: number;
+//             }[] | undefined
+//         } | undefined
+//     }[] | undefined;
+//     Date: Date;
+//     Arr: string[];
+//     Obj: {
+//         A: number
+//     };
+// }
 
 // let form = editable<Form>({
 //     Date: new Date(),
