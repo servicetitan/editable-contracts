@@ -44,6 +44,7 @@ function editableInventory(): [InventoryDto, Editor<InventoryDto>] {
         $: {
             id: () => true,
             count: () => true,
+            age: (age: number) => age >= 21 && '21+ only',
             metadata: {
                 validator: () => true,
                 $: {
@@ -242,9 +243,9 @@ describe('DTO editing doesn\'t break editor', () => {
 
         inventoryDto.metadata!.key4!.splice(0, 0, {
             id: 7
-        },                                  {
+        }, {
             id: 8
-        },                                  {
+        }, {
             id: 9
         });
 
@@ -289,6 +290,29 @@ describe('DTO editing doesn\'t break editor', () => {
         });
 
         expect(inventoryDto.metadata!.key4!.map(item => item.id)).toMatchSnapshot();
+    });
+});
+
+describe('Validation', () => {
+    jest.useFakeTimers();
+
+    test('Field validation', () => {
+        const [inventoryDto, inventoryDtoEditor] = editableInventory();
+
+        jest.runAllTimers();
+        // expect(editableInventoryDto.hasError).toBe(false);
+        expect(inventoryDtoEditor.$.age.hasError).toBe(false);
+
+        inventoryDtoEditor.$.age.onChange(15);
+        //inventoryDtoEditor.$.metadata.$!.key0.onChange(true);
+        jest.runAllTimers();
+        // expect(editableInventoryDto.hasError).toBe(true);
+        expect(inventoryDtoEditor.$.age.hasError).toBe(true);
+
+        inventoryDto.age = 25;
+        jest.runAllTimers();
+        // expect(editableInventoryDto.hasError).toBe(false);
+        expect(inventoryDtoEditor.$.age.hasError).toBe(false);
     });
 });
 
@@ -419,95 +443,6 @@ describe('DTO editing doesn\'t break editor', () => {
 
 //         editableInventoryDto.$.metadata.onChange(undefined);
 //         expect(() => editableInventoryDto.$.metadata.$!.key0).toThrow();
-//     });
-// });
-
-// describe('MobX', () => {
-//     test('shallow prop is observable', () => {
-//         const [, editableInventoryDto] = editableInventory();
-//         const result: string[] = [];
-//         autorun(() => {
-//             result.push(editableInventoryDto.$.name.value);
-//         });
-//         editableInventoryDto.$.name.onChange('necklace');
-//         expect(result).toEqual(['ring', 'necklace']);
-//     });
-
-//     test('deep prop is observable', () => {
-//         const [, editableInventoryDto] = editableInventory();
-//         const result: (string | undefined)[] = [];
-//         autorun(() => {
-//             result.push(editableInventoryDto.$.metadata.$!.key1.value);
-//         });
-//         editableInventoryDto.$.metadata.$!.key1.onChange('necklace');
-//         expect(result).toEqual([undefined, 'necklace']);
-//     });
-
-//     test('deep array prop is observable', () => {
-//         const [, editableInventoryDto] = editableInventory();
-//         const result: number[] = [];
-//         autorun(() => {
-//             result.push(editableInventoryDto.$.metadata.$!.key3.$![0].value);
-//         });
-//         editableInventoryDto.$.metadata.$!.key3.$![0].onChange(2);
-//         expect(result).toEqual([1, 2]);
-//     });
-
-//     test('top level value is observing shallow changes', () => {
-//         const [, editableInventoryDto] = editableInventory();
-//         const result: string[] = [];
-//         autorun(() => {
-//             result.push(editableInventoryDto.value.name);
-//         });
-//         editableInventoryDto.$.name.onChange('necklace');
-//         expect(result).toEqual(['ring', 'necklace']);
-//     });
-
-//     test('top level value is observing deep changes', () => {
-//         const [, editableInventoryDto] = editableInventory();
-//         const result: number[] = [];
-//         autorun(() => {
-//             result.push(editableInventoryDto.value.metadata!.key3![0]);
-//         });
-//         editableInventoryDto.$.metadata.$!.key3.$![0].onChange(2);
-//         expect(result).toEqual([1, 2]);
-//     });
-
-//     test('top level value is observing top level changes', () => {
-//         const [inventoryDto, editableInventoryDto] = editableInventory();
-//         const result: InventoryDto[] = [];
-//         autorun(() => {
-//             result.push(editableInventoryDto.value);
-//         });
-//         const newInventoryDto = {
-//             id: 2,
-//             age: 10,
-//             name: 'table'
-//         };
-//         editableInventoryDto.onChange(newInventoryDto);
-//         expect(result).toEqual([inventoryDto, newInventoryDto]);
-//     });
-
-//     test('array is observable', () => {
-//         const [, editableInventoryDto] = editableInventory();
-//         const result: number[][] = [];
-//         autorun(() => {
-//             result.push(editableInventoryDto.value.metadata!.key4!.map(item => item.id));
-//         });
-//         editableInventoryDto.$.metadata.$!.key4.$!.push({ id: 2 });
-//         expect(result).toEqual([[1], [1, 2]]);
-//     });
-
-//     test('newly pushed array value is observable', () => {
-//         const [, editableInventoryDto] = editableInventory();
-//         const result: number[] = [];
-
-//         editableInventoryDto.$.metadata.$!.key4.$!.push({ id: 2 });
-//         autorun(() => {
-//             result.push(editableInventoryDto.value.metadata!.key4![1].id);
-//         });
-//         editableInventoryDto.$.metadata.$!.key4.$![1].$.id.onChange(3);
-//         expect(result).toEqual([2, 3]);
 //     });
 // });
 
