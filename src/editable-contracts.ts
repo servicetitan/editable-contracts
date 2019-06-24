@@ -1,6 +1,7 @@
 // Tech debt
 // 1) Profile memory
 // 2) Debug how it works
+// 3) Object structure change (array -> object -> array)
 
 import { isObservable, entries, observable, IObservableArray, IObservableObject, observe, transaction, reaction } from 'mobx';
 
@@ -47,25 +48,22 @@ export type Validator<T, TParent = undefined> = NonNullable<T> extends Primitive
     ? ValidatorFunction<T, TParent>
     : ValidatorCompositeNode<T, TParent>;
 
-type WithIndex<T> = T & { index: number };
+type WithKey<T> = T & { key: number | string };
 
-function isPrimitive(obj?: any) {
-    return Object(obj) !== obj || obj instanceof Date;
+interface DeriveFunc {
+    (
+        object: any,
+        deriveItem: (item: any, key: number | string) => any,
+        updateItem: (item: any, derivative: any, key: number | string, oldValue?: any, newValue?: any) => any
+    ): any
 }
-
-function isObject(value: any) {
-    return value !== null && typeof value === 'object';
-}
-
-// /** @deprecated since v4.0.0 - use `(typeof value !== 'object' && typeof value !== 'function') || value === null` instead. */
-// function isPrimitive(object: any): boolean;
 
 function deriveArray<T, TT>(
     array: IObservableArray<T>,
-    deriveItem: (item: T, index: number) => WithIndex<TT>,
-    updateItem: (item: T, derivative: WithIndex<TT>) => WithIndex<TT>
-): WithIndex<TT>[] {
-    const derivative: (TT & { index: number })[] = [];
+    deriveItem: (item: T, key: number) => WithKey<TT>,
+    updateItem: (item: T, derivative: WithKey<TT>, key: number, oldValue?: any, newValue?: any) => WithKey<TT>
+): WithKey<TT>[] {
+    const derivative: (WithKey<TT>)[] = [];
     transaction(() => {
         array.forEach((item, index) => {
             derivative.push(deriveItem(item, index));
@@ -74,7 +72,7 @@ function deriveArray<T, TT>(
     array.observe((changeData) => {
         transaction(() => {
             if (changeData.type === 'update') {
-                derivative[changeData.index] = updateItem(changeData.newValue, derivative[changeData.index]);
+                derivative[changeData.index] = updateItem(changeData.newValue, derivative[changeData.index], changeData.index, changeData.oldValue, changeData.newValue);
                 return;
             }
             derivative.splice(
@@ -83,7 +81,7 @@ function deriveArray<T, TT>(
                 ...changeData.added.map((item, index) => deriveItem(item, changeData.index + index))
             );
             derivative.forEach((item, index) => {
-                item.index = index;
+                item.key = index;
             });
         });
     });
@@ -93,7 +91,7 @@ function deriveArray<T, TT>(
 function deriveObject<T>(
     object: IObservableObject,
     deriveItem: (item: any, key: string) => T,
-    updateItem: (item: any, derivative: T, key: string) => T
+    updateItem: (item: any, derivative: T, key: string, oldValue?: any, newValue?: any) => T
 ) {
     const derivative = {} as any;
     transaction(() => {
@@ -104,7 +102,9 @@ function deriveObject<T>(
     observe(object, (change) => {
         transaction(() => {
             if (change.type === 'add' || change.type === 'update') {
-                derivative[change.name] = change.type === 'add' ? deriveItem(change.newValue, change.name) : updateItem(change.newValue, derivative[change.name], change.name);
+                derivative[change.name] = change.type === 'add' 
+                    ? deriveItem(change.newValue, change.name) 
+                    : updateItem(change.newValue, derivative[change.name], change.name, change.oldValue, change.newValue);
                 return;
             }
             delete derivative[change.name];
@@ -113,112 +113,94 @@ function deriveObject<T>(
     return derivative;
 }
 
-export function editor<T extends {} | any[], TParent = undefined>(contract: T, validator?: Validator<T, TParent>): Editor<T, TParent> {
-    return editor_(contract, validator);
+function isPrimitive(obj?: any) {
+    return Object(obj) !== obj || obj instanceof Date;
 }
 
-function editor_(contract: any, validator?: any): any {
-    if (!isObservable(contract)) {
-        throw 'Contract object has to be observable.';
+function isObject(value: any) {
+    return value !== null && typeof value === 'object';
+}
+
+function isCompositeNode(value: any) {
+    return Array.isArray(value) || isObject(value);
+}
+
+export function editor<T extends {} | any[], TParent = undefined>(contract: T, validator?: Validator<T, TParent>): Editor<T, TParent> {
+    return editor_(contract, undefined, undefined, validator);
+}
+
+function editor_(node: any, parentNodeKey: any, parentNode: any, validator?: any): any {
+    if (!isPrimitive(node) && !isObservable(node)) {
+        throw 'Contract object/array has to be observable.';
     }
 
-    let contractEditor: any;
-    if (Array.isArray(contract)) {
-        contractEditor = deriveArray(contract as IObservableArray<any>, (_0, index) => {
-            let $cache: any;
-            let valueCache: any;
-            const node: any = {
-                index,
-                onChange(value: any) {
-                    // TODO: test why removing `this` from index doesn't break tests
-                    contract[this.index] = value;
-                    this.isDirty = true;
-                },
-                get $() {
-                    if ($cache === undefined || contract[this.index] !== valueCache) {
-                        const childValidator = validator && validator.$ ? validator.$[this.index] : undefined;
-                        $cache = editor_(contract[this.index], childValidator).$;
-                        valueCache = contract[this.index];
-                    }
-                    return $cache;
-                },
-                isDirty: false,
-                hasError: false,
-                _validationDisposer: reaction(() => {
-                    const childValidator = validator && validator.$ && validator.$[0] ? validator.$[node.index] : undefined;
-                    if (childValidator) {
-                        try {
-                            return !childValidator(contract[node.index]);
+    let $cache: any;
+    const editorNode: any = {
+        key: parentNodeKey,
+        onChange(value: any) {
+            if (parentNode === undefined) {
+                throw new Error('Can\'t call onChange on contract root.')
+            }
+            parentNode[editorNode.key] = value;
+            editorNode.isDirty = true;
+        },
+        get $() {
+            if ($cache === undefined) {
+                const deriveFunc: DeriveFunc = Array.isArray(node) ? deriveArray : deriveObject;
+                const derivative = deriveFunc(node, (_0, key) => {
+                    const childValidator = validator && validator.$ ? validator.$[editorNode.key] : undefined;
+                    return editor_(node[key], key, node, childValidator)
+                }, (_0, derivative, key, oldValue, newValue) => {
+                    if (isCompositeNode(newValue) || isCompositeNode(oldValue) && isPrimitive(newValue)) {
+                        if (derivative._validationDisposer) {
+                            // should be recursive for all subnodes of derivative
+                            derivative._validationDisposer();
                         }
-                        catch(e) {
-                            console.log(node.index)
+                        const childValidator = validator && validator.$ ? validator.$[editorNode.key] : undefined;
+                        return editor_(node[key], key, node, childValidator)
+                    }
+                    return derivative;
+                });
+                $cache = new Proxy(derivative, {
+                    get(target, p: any) {
+                        if (!target.hasOwnProperty(p)) {
+                            node[p] = undefined;
                         }
+                        return target[p];
                     }
-                    return false;
-                }, (res: boolean) => {
-                    node.hasError = res;
-                }, { delay: 200 })
-            };
-            return node;
-        }, (_0, derivative) => derivative);
-    } else {
-        contractEditor = deriveObject(contract, (_0, key) => {
-            let $cache: any;
-            let valueCache: any;
-            const node: any = {
-                key,
-                onChange(value: any) {
-                    contract[key] = value;
-                    node.isDirty = true;
-                },
-                get $() {
-                    if ($cache === undefined || contract[key] !== valueCache) {
-                        const childValidator = validator && validator.$ ? validator.$[key] : undefined;
-                        $cache = editor_(contract[key], childValidator).$;
-                        valueCache = contract[key];
-                    }
-                    return $cache;
-                },
-                isDirty: false,
-                hasError: false,
-                // Even though there is a disposer, we are not calling it manually anywhere
-                // GC engine is be able to collect reaction as soon as everyhting it is observing can be GC'ed as well
-                // this is safe since validators are static functions that are only touching contract observables
-                // though someone can access other observables in validator via closure, Lord help them
-                // TODO: consider exposing dispose method
-                _validationDisposer: reaction(() => {
-                    let childValidator = validator && validator.$ ? validator.$[key] : undefined;
-                    if (isObject(childValidator)) {
-                        childValidator = childValidator.validator;
-                    }
-                    if (childValidator) {
-                        return !childValidator(contract[key]);
-                    }
-                    return false;
-                }, (res: boolean) => {
-                    node.hasError = res;
-                }, { delay: 200 })
-            };
-            return node;
-        }, (_0, derivative) => derivative);
-    }
+                });
+            }
+            return $cache;
+        },
+        isDirty: false,
+        hasError: false,
+        // Even though there is a disposer, we are not calling it manually anywhere
+        // GC engine is be able to collect reaction as soon as everyhting it is observing can be GC'ed as well
+        // this is safe since validators are static functions that are only touching contract observables
+        // though someone can access other observables in validator via closure, Lord help them
+        // TODO: consider exposing dispose method
+        // dispose should be done automatically for composite nodes when their value changes
+        _validationDisposer: reaction(() => {
+            // let childValidator = validator && validator.$ ? validator.$[editorNode.key] : undefined;
+            // if (isObject(childValidator)) {
+            //     childValidator = childValidator.validator;
+            // }
+            // if (childValidator) {
+            //     return !childValidator(node, parentNode);
+            // }
+            return false;
+        }, (res: boolean) => {
+            editorNode.hasError = res;
+        }, { delay: 200 })
+    };
 
     // Materialize all nested editors
-    Object.entries(contractEditor).forEach(([key]) => {
-        if (!isPrimitive(contract[key])) {
-            contractEditor[key].$;
-        }
-    });
-
-    const proxy = new Proxy(contractEditor, {
-        get(target, p: any) {
-            if (!target.hasOwnProperty(p)) {
-                contract[p] = undefined;
-            }
-            return target[p];
-        }
-    });
+    // Object.entries(contractEditor).forEach(([key]) => {
+    //     if (!isPrimitive(contract[key])) {
+    //         contractEditor[key].$;
+    //     }
+    // });
 
     // TODO: improve Editor type to return object editor without shallow $
-    return { $: proxy };
+    return editorNode;
 }
