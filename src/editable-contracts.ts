@@ -56,7 +56,7 @@ interface DeriveFunc {
         object: any,
         deriveItem: (item: any, key: number | string) => any,
         updateItem: (item: any, derivative: any, key: number | string, oldValue?: any, newValue?: any) => any
-    ): any
+    ): any;
 }
 
 function deriveArray<T, TT>(
@@ -73,7 +73,13 @@ function deriveArray<T, TT>(
     array.observe((changeData) => {
         transaction(() => {
             if (changeData.type === 'update') {
-                derivative[changeData.index] = updateItem(changeData.newValue, derivative[changeData.index], changeData.index, changeData.oldValue, changeData.newValue);
+                derivative[changeData.index] = updateItem(
+                    changeData.newValue,
+                    derivative[changeData.index],
+                    changeData.index,
+                    changeData.oldValue,
+                    changeData.newValue
+                );
                 return;
             }
             derivative.splice(
@@ -103,8 +109,8 @@ function deriveObject<T>(
     observe(object, (change) => {
         transaction(() => {
             if (change.type === 'add' || change.type === 'update') {
-                derivative[change.name] = change.type === 'add' 
-                    ? deriveItem(change.newValue, change.name) 
+                derivative[change.name] = change.type === 'add'
+                    ? deriveItem(change.newValue, change.name)
                     : updateItem(change.newValue, derivative[change.name], change.name, change.oldValue, change.newValue);
                 return;
             }
@@ -140,7 +146,7 @@ function editor_(node: any, parentNodeKey: any, parentNode: any, validator?: any
         key: parentNodeKey,
         onChange(value: any) {
             if (parentNode === undefined) {
-                throw new Error('Can\'t call onChange on contract root.')
+                throw new Error('Can\'t call onChange on contract root.');
             }
             parentNode[editorNode.key] = value;
             editorNode.isDirty = true;
@@ -149,20 +155,24 @@ function editor_(node: any, parentNodeKey: any, parentNode: any, validator?: any
             if ($cache === undefined) {
                 const isArray = Array.isArray(node);
                 const deriveFunc: DeriveFunc = isArray ? deriveArray : deriveObject;
-                const derivative = deriveFunc(node, (_0, key) => {
-                    const childValidator = validator && validator.$ ? validator.$[isArray ? 0 : key] : undefined;
-                    return editor_(node[key], key, node, childValidator)
-                }, (_0, derivative, key, oldValue, newValue) => {
-                    if (isCompositeNode(newValue) || isCompositeNode(oldValue) && isPrimitive(newValue)) {
-                        if (derivative._validationDisposer) {
-                            // should be recursive for all subnodes of derivative
-                            derivative._validationDisposer();
-                        }
+                const derivative = deriveFunc(
+                    node,
+                    (_0, key) => {
                         const childValidator = validator && validator.$ ? validator.$[isArray ? 0 : key] : undefined;
-                        return editor_(node[key], key, node, childValidator)
+                        return editor_(node[key], key, node, childValidator);
+                    },
+                    (_0, derivative, key, oldValue, newValue) => {
+                        if (isCompositeNode(newValue) || isCompositeNode(oldValue) && isPrimitive(newValue)) {
+                            if (derivative._validationDisposer) {
+                                // should be recursive for all subnodes of derivative
+                                derivative._validationDisposer();
+                            }
+                            const childValidator = validator && validator.$ ? validator.$[isArray ? 0 : key] : undefined;
+                            return editor_(node[key], key, node, childValidator);
+                        }
+                        return derivative;
                     }
-                    return derivative;
-                });
+                );
                 $cache = new Proxy(derivative, {
                     get(target, p: any) {
                         if (!target.hasOwnProperty(p)) {
@@ -184,21 +194,25 @@ function editor_(node: any, parentNodeKey: any, parentNode: any, validator?: any
     // though someone can access other observables in validator via closure, Lord help them
     // TODO: consider exposing dispose method
     // dispose should be done automatically for composite nodes when their value changes
-    editorNode._validationDisposer = reaction(() => {
-        // typeof value === 'function'
-        if (!validator) {
+    editorNode._validationDisposer = reaction(
+        () => {
+            // typeof value === 'function'
+            if (!validator) {
+                return false;
+            }
+            if (typeof validator === 'function') {
+                return !!validator(parentNode[parentNodeKey], parentNode);
+            }
+            if (typeof validator.validator === 'function') {
+                return !!validator.validator(node, parentNode);
+            }
             return false;
-        }
-        if (typeof validator === 'function') {
-            return !!validator(parentNode[parentNodeKey], parentNode);
-        }
-        if (typeof validator.validator === 'function') {
-            return !!validator.validator(node, parentNode);
-        }
-        return false;
-    }, (res: boolean) => {
-        editorNode.hasError = res;
-    }, { delay: 200, fireImmediately: true })
+        },
+        (res: boolean) => {
+            editorNode.hasError = res;
+        },
+        { delay: 200, fireImmediately: true }
+    );
 
     // Materialize all nested editors
     node && Object.entries(node).forEach(([key]) => {

@@ -215,13 +215,19 @@ describe('DTO editing doesn\'t break editor', () => {
     test('Edit array manipulations. Splice.', () => {
         const [inventoryDto, inventoryDtoEditor] = editableInventory();
 
-        inventoryDto.metadata!.key4!.splice(0, 0, {
-            id: 7
-        }, {
-            id: 8
-        }, {
-            id: 9
-        });
+        inventoryDto.metadata!.key4!.splice(
+            0,
+            0,
+            {
+                id: 7
+            },
+            {
+                id: 8
+            },
+            {
+                id: 9
+            }
+        );
 
         expect(inventoryDto.metadata!.key4!.map(item => item.id)).toMatchSnapshot();
 
@@ -283,7 +289,7 @@ describe('Validation', () => {
         expect(inventoryDtoEditor.$.age.hasError).toBe(false);
 
         inventoryDtoEditor.$.age.onChange(15);
-        //inventoryDtoEditor.$.metadata.$!.key0.onChange(true);
+        // inventoryDtoEditor.$.metadata.$!.key0.onChange(true);
         jest.runAllTimers();
         // expect(editableInventoryDto.hasError).toBe(true);
         expect(inventoryDtoEditor.$.age.hasError).toBe(true);
@@ -300,7 +306,7 @@ describe('Validation', () => {
             $: {
                 metadata: {
                     $: {
-                        key0: value => value === false && 'Value should be true',
+                        key0: value => !value && 'Value should be true',
                     }
                 }
             }
@@ -331,7 +337,6 @@ describe('Validation', () => {
                 }
             }
         });
-        
 
         jest.runAllTimers();
         expect(inventoryDtoEditor.$.metadata.$!.key3.$![0].hasError).toBe(true);
@@ -374,7 +379,7 @@ describe('Validation', () => {
             }
         });
 
-        inventoryDto.metadata!.key4 = [{ id: 1 }, { id: 2 }, { id: 3 }]
+        inventoryDto.metadata!.key4 = [{ id: 1 }, { id: 2 }, { id: 3 }];
 
         jest.runAllTimers();
         expect(inventoryDtoEditor.$.metadata.$!.key4.$![0].hasError).toBe(true);
