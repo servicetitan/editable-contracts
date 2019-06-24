@@ -2,8 +2,9 @@
 // 1) Profile memory
 // 2) Debug how it works
 // 3) Object structure change (array -> object -> array)
+// Test that derivation is optimal
 
-import { isObservable, entries, observable, IObservableArray, IObservableObject, observe, transaction, reaction } from 'mobx';
+import { isObservable, entries, IObservableArray, IObservableObject, observe, transaction, reaction } from 'mobx';
 
 type PrimitiveType = string | number | boolean | Date;
 
@@ -146,9 +147,10 @@ function editor_(node: any, parentNodeKey: any, parentNode: any, validator?: any
         },
         get $() {
             if ($cache === undefined) {
-                const deriveFunc: DeriveFunc = Array.isArray(node) ? deriveArray : deriveObject;
+                const isArray = Array.isArray(node);
+                const deriveFunc: DeriveFunc = isArray ? deriveArray : deriveObject;
                 const derivative = deriveFunc(node, (_0, key) => {
-                    const childValidator = validator && validator.$ ? validator.$[editorNode.key] : undefined;
+                    const childValidator = validator && validator.$ ? validator.$[isArray ? 0 : key] : undefined;
                     return editor_(node[key], key, node, childValidator)
                 }, (_0, derivative, key, oldValue, newValue) => {
                     if (isCompositeNode(newValue) || isCompositeNode(oldValue) && isPrimitive(newValue)) {
@@ -156,7 +158,7 @@ function editor_(node: any, parentNodeKey: any, parentNode: any, validator?: any
                             // should be recursive for all subnodes of derivative
                             derivative._validationDisposer();
                         }
-                        const childValidator = validator && validator.$ ? validator.$[editorNode.key] : undefined;
+                        const childValidator = validator && validator.$ ? validator.$[isArray ? 0 : key] : undefined;
                         return editor_(node[key], key, node, childValidator)
                     }
                     return derivative;
@@ -173,33 +175,37 @@ function editor_(node: any, parentNodeKey: any, parentNode: any, validator?: any
             return $cache;
         },
         isDirty: false,
-        hasError: false,
-        // Even though there is a disposer, we are not calling it manually anywhere
-        // GC engine is be able to collect reaction as soon as everyhting it is observing can be GC'ed as well
-        // this is safe since validators are static functions that are only touching contract observables
-        // though someone can access other observables in validator via closure, Lord help them
-        // TODO: consider exposing dispose method
-        // dispose should be done automatically for composite nodes when their value changes
-        _validationDisposer: reaction(() => {
-            // let childValidator = validator && validator.$ ? validator.$[editorNode.key] : undefined;
-            // if (isObject(childValidator)) {
-            //     childValidator = childValidator.validator;
-            // }
-            // if (childValidator) {
-            //     return !childValidator(node, parentNode);
-            // }
-            return false;
-        }, (res: boolean) => {
-            editorNode.hasError = res;
-        }, { delay: 200 })
+        hasError: false
     };
 
+    // Even though there is a disposer, we are not calling it manually anywhere
+    // GC engine is be able to collect reaction as soon as everyhting it is observing can be GC'ed as well
+    // this is safe since validators are static functions that are only touching contract observables
+    // though someone can access other observables in validator via closure, Lord help them
+    // TODO: consider exposing dispose method
+    // dispose should be done automatically for composite nodes when their value changes
+    editorNode._validationDisposer = reaction(() => {
+        // typeof value === 'function'
+        if (!validator) {
+            return false;
+        }
+        if (typeof validator === 'function') {
+            return !!validator(parentNode[parentNodeKey], parentNode);
+        }
+        if (typeof validator.validator === 'function') {
+            return !!validator.validator(node, parentNode);
+        }
+        return false;
+    }, (res: boolean) => {
+        editorNode.hasError = res;
+    }, { delay: 200, fireImmediately: true })
+
     // Materialize all nested editors
-    // Object.entries(contractEditor).forEach(([key]) => {
-    //     if (!isPrimitive(contract[key])) {
-    //         contractEditor[key].$;
-    //     }
-    // });
+    node && Object.entries(node).forEach(([key]) => {
+        if (!isPrimitive(node[key])) {
+            editorNode.$[key].$;
+        }
+    });
 
     // TODO: improve Editor type to return object editor without shallow $
     return editorNode;

@@ -39,33 +39,7 @@ function editableInventory(): [InventoryDto, Editor<InventoryDto>] {
         }
     });
 
-    return [inventoryDto, editor(inventoryDto, {
-        validator: () => true,
-        $: {
-            id: () => true,
-            count: () => true,
-            age: (age: number) => age >= 21 && '21+ only',
-            metadata: {
-                validator: () => true,
-                $: {
-                    key0: () => true,
-                    key3: {
-                        validator: () => true,
-                        $: [() => true]
-                    },
-                    key4: {
-                        validator: () => true,
-                        $: [{
-                            validator: () => true,
-                            $: {
-                                id: () => true
-                            }
-                        }]
-                    }
-                }
-            }
-        }
-    })];
+    return [inventoryDto, editor(inventoryDto)];
 }
 
 describe('Basic editor usages', () => {
@@ -297,7 +271,12 @@ describe('Validation', () => {
     jest.useFakeTimers();
 
     test('Field validation', () => {
-        const [inventoryDto, inventoryDtoEditor] = editableInventory();
+        const [inventoryDto] = editableInventory();
+        const inventoryDtoEditor = editor(inventoryDto, {
+            $: {
+                age: age => age < 21 && '21+ only'
+            }
+        });
 
         jest.runAllTimers();
         // expect(editableInventoryDto.hasError).toBe(false);
@@ -313,6 +292,117 @@ describe('Validation', () => {
         jest.runAllTimers();
         // expect(editableInventoryDto.hasError).toBe(false);
         expect(inventoryDtoEditor.$.age.hasError).toBe(false);
+    });
+
+    test('Nested field validation', () => {
+        const [inventoryDto] = editableInventory();
+        const inventoryDtoEditor = editor(inventoryDto, {
+            $: {
+                metadata: {
+                    $: {
+                        key0: value => value === false && 'Value should be true',
+                    }
+                }
+            }
+        });
+
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.metadata.$!.key0.hasError).toBe(true);
+
+        inventoryDtoEditor.$.metadata.$!.key0.onChange(true);
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.metadata.$!.key0.hasError).toBe(false);
+
+        inventoryDto.metadata!.key0 = false;
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.metadata.$!.key0.hasError).toBe(true);
+    });
+
+    test('Nested array validation', () => {
+        const [inventoryDto] = editableInventory();
+        const inventoryDtoEditor = editor(inventoryDto, {
+            $: {
+                metadata: {
+                    $: {
+                        key3: {
+                            $: [value => value % 2 === 1 && 'Value should be even']
+                        }
+                    }
+                }
+            }
+        });
+        
+
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.metadata.$!.key3.$![0].hasError).toBe(true);
+        expect(inventoryDtoEditor.$.metadata.$!.key3.$![1].hasError).toBe(false);
+        expect(inventoryDtoEditor.$.metadata.$!.key3.$![2].hasError).toBe(true);
+
+        inventoryDto.metadata!.key3![0] = 0;
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.metadata.$!.key3.$![0].hasError).toBe(false);
+
+        inventoryDto.metadata!.key3![3] = 3;
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.metadata.$!.key3.$![3].hasError).toBe(true);
+
+        inventoryDto.metadata!.key3![3] = 4;
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.metadata.$!.key3.$![3].hasError).toBe(false);
+
+        inventoryDto.metadata!.key3!.push(7);
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.metadata.$!.key3.$![4].hasError).toBe(true);
+    });
+
+    test('Nested array validation with object values', () => {
+        const [inventoryDto] = editableInventory();
+        const inventoryDtoEditor = editor(inventoryDto, {
+            $: {
+                metadata: {
+                    $: {
+                        key4: {
+                            $: [{
+                                validator: value => value.id % 2 === 1 && 'Value should be even',
+                                $: {
+                                    id: value => value % 2 === 1 && 'Value should be even'
+                                }
+                            }]
+                        }
+                    }
+                }
+            }
+        });
+
+        inventoryDto.metadata!.key4 = [{ id: 1 }, { id: 2 }, { id: 3 }]
+
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.metadata.$!.key4.$![0].hasError).toBe(true);
+        expect(inventoryDtoEditor.$.metadata.$!.key4.$![1].hasError).toBe(false);
+        expect(inventoryDtoEditor.$.metadata.$!.key4.$![2].hasError).toBe(true);
+        expect(inventoryDtoEditor.$.metadata.$!.key4.$![0].$.id.hasError).toBe(true);
+        expect(inventoryDtoEditor.$.metadata.$!.key4.$![1].$.id.hasError).toBe(false);
+        expect(inventoryDtoEditor.$.metadata.$!.key4.$![2].$.id.hasError).toBe(true);
+
+        inventoryDto.metadata!.key4![0] = { id: 0 };
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.metadata.$!.key4.$![0].hasError).toBe(false);
+        expect(inventoryDtoEditor.$.metadata.$!.key4.$![0].$.id.hasError).toBe(false);
+
+        inventoryDto.metadata!.key4![3] = { id: 3 };
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.metadata.$!.key4.$![3].hasError).toBe(true);
+        expect(inventoryDtoEditor.$.metadata.$!.key4.$![3].$.id.hasError).toBe(true);
+
+        inventoryDto.metadata!.key4![3] = { id: 4 };
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.metadata.$!.key4.$![3].hasError).toBe(false);
+        expect(inventoryDtoEditor.$.metadata.$!.key4.$![3].$.id.hasError).toBe(false);
+
+        inventoryDto.metadata!.key4!.push({ id: 7 });
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.metadata.$!.key4.$![4].hasError).toBe(true);
+        expect(inventoryDtoEditor.$.metadata.$!.key4.$![4].$.id.hasError).toBe(true);
     });
 });
 
