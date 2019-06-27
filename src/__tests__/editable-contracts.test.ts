@@ -1,5 +1,5 @@
 import { Editor, editor } from '../editable-contracts';
-import { observable } from 'mobx';
+import { observable, autorun } from 'mobx';
 
 enum InventoryType {
     Furniture,
@@ -282,21 +282,19 @@ describe('Validation', () => {
             $: {
                 age: age => age < 21 && '21+ only'
             }
+        },                                {
+            validateImmediately: true
         });
 
         jest.runAllTimers();
-        // expect(editableInventoryDto.hasError).toBe(false);
         expect(inventoryDtoEditor.$.age.hasError).toBe(false);
 
         inventoryDtoEditor.$.age.onChange(15);
-        // inventoryDtoEditor.$.metadata.$!.key0.onChange(true);
         jest.runAllTimers();
-        // expect(editableInventoryDto.hasError).toBe(true);
         expect(inventoryDtoEditor.$.age.hasError).toBe(true);
 
         inventoryDto.age = 25;
         jest.runAllTimers();
-        // expect(editableInventoryDto.hasError).toBe(false);
         expect(inventoryDtoEditor.$.age.hasError).toBe(false);
     });
 
@@ -310,6 +308,8 @@ describe('Validation', () => {
                     }
                 }
             }
+        },                                {
+            validateImmediately: true
         });
 
         jest.runAllTimers();
@@ -336,6 +336,8 @@ describe('Validation', () => {
                     }
                 }
             }
+        },                                {
+            validateImmediately: true
         });
 
         jest.runAllTimers();
@@ -377,6 +379,8 @@ describe('Validation', () => {
                     }
                 }
             }
+        },                                {
+            validateImmediately: true
         });
 
         inventoryDto.metadata!.key4 = [{ id: 1 }, { id: 2 }, { id: 3 }];
@@ -409,193 +413,237 @@ describe('Validation', () => {
         expect(inventoryDtoEditor.$.metadata.$!.key4.$![4].hasError).toBe(true);
         expect(inventoryDtoEditor.$.metadata.$!.key4.$![4].$.id.hasError).toBe(true);
     });
+
+    test('Cross field validation', () => {
+        const [inventoryDto] = editableInventory();
+        const inventoryDtoEditor = editor(
+            inventoryDto,
+            {
+                $: {
+                    age: (age, parent) => {
+                        if (age < 21 && parent.name === 'Alcohol') {
+                            return '21+ only';
+                        }
+                        if (age < 10 && parent.name === 'Sweets') {
+                            return 'Ask you parents';
+                        }
+                        return false;
+                    }
+                }
+            },
+            {
+                validateImmediately: true
+            }
+        );
+
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.age.hasError).toBe(false);
+
+        inventoryDto.age = 18;
+
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.age.hasError).toBe(false);
+
+        inventoryDto.name = 'Alcohol';
+
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.age.hasError).toBe(true);
+
+        inventoryDto.name = 'Sweets';
+
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.age.hasError).toBe(false);
+
+        inventoryDto.age = 7;
+
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.age.hasError).toBe(true);
+    });
+
+    test('Object level validation', () => {
+        const [inventoryDto] = editableInventory();
+        const inventoryDtoEditor = editor(
+            inventoryDto,
+            {
+                validator: (dto) => {
+                    if (dto.age < 21 && dto.name === 'Alcohol') {
+                        return '21+ only';
+                    }
+                    if (dto.age < 10 && dto.name === 'Sweets') {
+                        return 'Ask you parents';
+                    }
+                    return false;
+                }
+            },
+            {
+                validateImmediately: true
+            }
+        );
+
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.hasError).toBe(false);
+
+        inventoryDto.age = 18;
+
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.hasError).toBe(false);
+
+        inventoryDto.name = 'Alcohol';
+
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.hasError).toBe(true);
+
+        inventoryDto.name = 'Sweets';
+
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.hasError).toBe(false);
+
+        inventoryDto.age = 7;
+
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.hasError).toBe(true);
+    });
+
+    test('Parent validation only tracks observed values', () => {
+        const [inventoryDto] = editableInventory();
+
+        const validator = jest.fn((age: number, dto: InventoryDto) => dto.name === 'beer' ? age >= 21 && '21+ only' : age >= 5 && 'Not for kids');
+        const inventoryDtoEditor = editor(
+            inventoryDto,
+            {
+                $: {
+                    age: validator
+                }
+            },
+            {
+                validateImmediately: true
+            }
+        );
+
+        // Simulate UI subscription
+        autorun(() => {
+            inventoryDtoEditor.$.age.hasError;
+        });
+
+        inventoryDtoEditor.$.age.onChange(2);
+        inventoryDtoEditor.$.name.onChange('Coca cola');
+        inventoryDtoEditor.$.location.onChange('LA');
+
+        jest.runAllTimers();
+        expect(validator).toHaveBeenCalledTimes(2);
+    });
+
+    test('Parent object hasError depends on children', () => {
+        const [inventoryDto] = editableInventory();
+        const inventoryDtoEditor = editor(
+            inventoryDto,
+            {
+                $: {
+                    age: age => age < 21 && '21+ only'
+                }
+            },
+            {
+                validateImmediately: true
+            }
+        );
+
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.hasError).toBe(false);
+        expect(inventoryDtoEditor.$.age.hasError).toBe(false);
+
+        inventoryDtoEditor.$.age.onChange(15);
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.hasError).toBe(true);
+        expect(inventoryDtoEditor.$.age.hasError).toBe(true);
+
+        inventoryDto.age = 25;
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.hasError).toBe(false);
+        expect(inventoryDtoEditor.$.age.hasError).toBe(false);
+    });
+
+    test('Parent object hasError depends on children. Deep object.', () => {
+        const [inventoryDto] = editableInventory();
+        const inventoryDtoEditor = editor(
+            inventoryDto,
+            {
+                $: {
+                    metadata: {
+                        $: {
+                            key0: value => !value && 'Value should be true',
+                        }
+                    }
+                }
+            },
+            {
+                validateImmediately: true
+            }
+        );
+
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.metadata.$!.key0.hasError).toBe(true);
+        expect(inventoryDtoEditor.hasError).toBe(true);
+        expect(inventoryDtoEditor.$.metadata.hasError).toBe(true);
+
+        inventoryDtoEditor.$.metadata.$!.key0.onChange(true);
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.metadata.$!.key0.hasError).toBe(false);
+        expect(inventoryDtoEditor.hasError).toBe(false);
+        expect(inventoryDtoEditor.$.metadata.hasError).toBe(false);
+
+        inventoryDto.metadata!.key0 = false;
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.metadata.$!.key0.hasError).toBe(true);
+        expect(inventoryDtoEditor.hasError).toBe(true);
+        expect(inventoryDtoEditor.$.metadata.hasError).toBe(true);
+    });
+
+    test('Parent object hasError depends on children. Deep array.', () => {
+        const [inventoryDto] = editableInventory();
+        const inventoryDtoEditor = editor(
+            inventoryDto,
+            {
+                $: {
+                    metadata: {
+                        $: {
+                            key3: {
+                                $: [value => value % 2 === 1 && 'Value should be even']
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                validateImmediately: true
+            }
+        );
+
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.metadata.$!.key3.hasError).toBe(true);
+        expect(inventoryDtoEditor.$.metadata.hasError).toBe(true);
+
+        inventoryDto.metadata!.key3![0] = 0;
+        inventoryDto.metadata!.key3![2] = 0;
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.metadata.$!.key3.hasError).toBe(false);
+        expect(inventoryDtoEditor.$.metadata.hasError).toBe(false);
+
+        inventoryDto.metadata!.key3![3] = 3;
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.metadata.$!.key3.hasError).toBe(true);
+        expect(inventoryDtoEditor.$.metadata.hasError).toBe(true);
+
+        inventoryDto.metadata!.key3![3] = 4;
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.metadata.$!.key3.hasError).toBe(false);
+        expect(inventoryDtoEditor.$.metadata.hasError).toBe(false);
+
+        inventoryDto.metadata!.key3!.push(7);
+        jest.runAllTimers();
+        expect(inventoryDtoEditor.$.metadata.$!.key3.hasError).toBe(true);
+        expect(inventoryDtoEditor.$.metadata.hasError).toBe(true);
+    });
 });
-
-// import { editable, Editor } from '../editable-contracts';
-// import { autorun } from 'mobx';
-
-// enum InventoryType {
-//     Furniture,
-//     Electronics,
-//     Tools,
-//     Jewelry
-// }
-// interface InventoryDto {
-//     id: number;
-//     age: number;
-//     name: string;
-//     type?: InventoryType | undefined;
-//     location?: string | undefined;
-//     count?: number | undefined;
-//     metadata?: {
-//         key0: boolean;
-//         key1?: string | undefined;
-//         key2?: number | undefined;
-//         key3?: number[] | undefined;
-//         key4?: {
-//             id: number
-//         }[]
-//     };
-// }
-
-// function editableInventory(): [InventoryDto, Editor<InventoryDto>] {
-//     const inventoryDto: InventoryDto = {
-//         id: 1,
-//         age: 100,
-//         name: 'ring',
-//         metadata: {
-//             key0: false,
-//             key3: [1, 2, 3],
-//             key4: [{
-//                 id: 1
-//             }]
-//         }
-//     };
-//     return [inventoryDto, editable(inventoryDto)];
-// }
-
-// describe('Basic', () => {
-//     test('Primitive values', () => {
-//         const [, editableInventoryDto] = editableInventory();
-
-//         expect(editableInventoryDto.$.id.value).toBe(1);
-//         expect(editableInventoryDto.$.location.value).toBe(undefined);
-//         expect(editableInventoryDto.$.metadata.$!.key3.$![0].value).toBe(1);
-//     });
-
-//     test('Nested array value', () => {
-//         const [, editableInventoryDto] = editableInventory();
-//         expect(editableInventoryDto.$.metadata.$!.key3.value).toEqual([1, 2, 3]);
-//         expect(editableInventoryDto.$.metadata.$!.key4.value![0]).toEqual({
-//             id: 1
-//         });
-//         expect(editableInventoryDto.$.metadata.$!.key4.$![0].value).toEqual({
-//             id: 1
-//         });
-//     });
-
-//     test('Form value', () => {
-//         const [inventoryDto, editableInventoryDto] = editableInventory();
-//         expect(editableInventoryDto.value).toEqual(inventoryDto);
-//     });
-
-//     test('onChange individual values', () => {
-//         const [, editableInventoryDto] = editableInventory();
-
-//         expect(editableInventoryDto.$.id.value).toBe(1);
-//         editableInventoryDto.$.id.onChange(2);
-//         expect(editableInventoryDto.$.id.value).toBe(2);
-
-//         expect(editableInventoryDto.$.location.value).toBe(undefined);
-//         editableInventoryDto.$.location.onChange('San Diego');
-//         expect(editableInventoryDto.$.location.value).toBe('San Diego');
-
-//         editableInventoryDto.$.metadata.$!.key1.onChange(undefined);
-//         editableInventoryDto.$.metadata.$!.key1.onChange('best choice');
-//         expect(editableInventoryDto.$.metadata.$!.key1.value).toBe('best choice');
-//     });
-
-//     test('onChange & nested array values', () => {
-//         const [, editableInventoryDto] = editableInventory();
-
-//         expect(editableInventoryDto.$.metadata.$!.key3.$![2].value).toBe(3);
-//         editableInventoryDto.$.metadata.$!.key3.$![2].onChange(4);
-//         expect(editableInventoryDto.$.metadata.$!.key3.$![2].value).toBe(4);
-//     });
-
-//     test('onChange & enum value', () => {
-//         const [, editableInventoryDto] = editableInventory();
-
-//         expect(editableInventoryDto.$.type.value).toBe(undefined);
-//         editableInventoryDto.$.type.onChange(InventoryType.Jewelry);
-//         expect(editableInventoryDto.$.type.value).toBe(InventoryType.Jewelry);
-//     });
-
-//     test('onChange object', () => {
-//         const [inventoryDto, editableInventoryDto] = editableInventory();
-
-//         expect(editableInventoryDto.$.metadata.value).toEqual(inventoryDto.metadata);
-//         const metadata: InventoryDto['metadata'] = {
-//             key0: true,
-//             key1: undefined,
-//             key2: 123,
-//             key3: [1]
-//         };
-//         editableInventoryDto.$.metadata.onChange(metadata);
-//         expect(editableInventoryDto.$.metadata.value).toEqual(metadata);
-//     });
-
-//     test('onChange array', () => {
-//         const [, editableInventoryDto] = editableInventory();
-
-//         expect(editableInventoryDto.$.metadata.$!.key3.value).toEqual([1, 2, 3]);
-//         editableInventoryDto.$.metadata.$!.key3.onChange([]);
-//         expect(editableInventoryDto.$.metadata.$!.key3.value).toEqual([]);
-//     });
-
-//     test('onChange undefined nested value to throw', () => {
-//         const [, editableInventoryDto] = editableInventory();
-
-//         editableInventoryDto.$.metadata.onChange(undefined);
-//         expect(() => editableInventoryDto.$.metadata.$!.key0).toThrow();
-//     });
-// });
-
-// describe('Validation', () => {
-//     test('Field validation', () => {
-//         const [, editableInventoryDto] = editableInventory();
-//         editableInventoryDto.$.age.validators(age => age >= 21 && '21+ only');
-//         // expect(editableInventoryDto.hasError).toBe(false);
-//         expect(editableInventoryDto.$.age.hasError).toBe(false);
-
-//         editableInventoryDto.$.age.onChange(15);
-//         // expect(editableInventoryDto.hasError).toBe(true);
-//         expect(editableInventoryDto.$.age.hasError).toBe(true);
-
-//         editableInventoryDto.$.age.onChange(25);
-//         // expect(editableInventoryDto.hasError).toBe(false);
-//         expect(editableInventoryDto.$.age.hasError).toBe(false);
-//     });
-
-//     test('Field validation with parent', () => {
-//         const [, editableInventoryDto] = editableInventory();
-//         editableInventoryDto.$.age.validators((age, dto) => dto.name === 'beer' ? age >= 21 && '21+ only' : age >= 5 && 'Not for kids');
-//         expect(editableInventoryDto.$.age.hasError).toBe(false);
-
-//         editableInventoryDto.$.age.onChange(15);
-//         expect(editableInventoryDto.$.age.hasError).toBe(false);
-//         editableInventoryDto.$.name.onChange('beer');
-//         expect(editableInventoryDto.$.age.hasError).toBe(true);
-
-//         editableInventoryDto.$.age.onChange(25);
-//         expect(editableInventoryDto.$.age.hasError).toBe(false);
-
-//         editableInventoryDto.$.age.onChange(15);
-//         expect(editableInventoryDto.$.age.hasError).toBe(true);
-//         editableInventoryDto.$.name.onChange('Pepsi');
-//         expect(editableInventoryDto.$.age.hasError).toBe(false);
-
-//         editableInventoryDto.$.age.onChange(4);
-//         expect(editableInventoryDto.$.age.hasError).toBe(true);
-//     });
-
-//     test('Parent validation only tracks observed values', () => {
-//         const [, editableInventoryDto] = editableInventory();
-//         const validator = jest.fn((age: number, dto: InventoryDto) => dto.name === 'beer' ? age >= 21 && '21+ only' : age >= 5 && 'Not for kids');
-//         editableInventoryDto.$.age.validators(validator);
-
-//         // Simulate UI subscription
-//         autorun(() => {
-//             editableInventoryDto.$.age.hasError;
-//         });
-
-//         editableInventoryDto.$.age.onChange(2);
-//         editableInventoryDto.$.name.onChange('Coca cola');
-//         editableInventoryDto.$.location.onChange('LA');
-
-//         expect(validator).toHaveBeenCalledTimes(2);
-//     });
-// });
 
 // /* Type tests */
 // enum E {

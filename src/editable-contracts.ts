@@ -2,13 +2,18 @@
 // 1) Profile memory
 // 2) Debug how it works
 // 3) Object structure change (array -> object -> array)
+// 4) Object validation runs two times on child change
 // Test that derivation is optimal
 
-import { isObservable, entries, IObservableArray, IObservableObject, observe, transaction, reaction } from 'mobx';
+import { isObservable, entries, IObservableArray, IObservableObject, observe, transaction, reaction, decorate, observable, action, computed, has } from 'mobx';
 
 type PrimitiveType = string | number | boolean | Date;
 
 // Editor types
+interface EditorOptions {
+    validateImmediately: boolean;
+}
+
 type EditorNode<T, TParent> = {
     onChange(value: T): void;
     isDirty: boolean;
@@ -65,31 +70,27 @@ function deriveArray<T, TT>(
     updateItem: (item: T, derivative: WithKey<TT>, key: number, oldValue?: any, newValue?: any) => WithKey<TT>
 ): WithKey<TT>[] {
     const derivative: (WithKey<TT>)[] = [];
-    transaction(() => {
-        array.forEach((item, index) => {
-            derivative.push(deriveItem(item, index));
-        });
+    array.forEach((item, index) => {
+        derivative.push(deriveItem(item, index));
     });
     array.observe((changeData) => {
-        transaction(() => {
-            if (changeData.type === 'update') {
-                derivative[changeData.index] = updateItem(
-                    changeData.newValue,
-                    derivative[changeData.index],
-                    changeData.index,
-                    changeData.oldValue,
-                    changeData.newValue
-                );
-                return;
-            }
-            derivative.splice(
+        if (changeData.type === 'update') {
+            derivative[changeData.index] = updateItem(
+                changeData.newValue,
+                derivative[changeData.index],
                 changeData.index,
-                changeData.removedCount,
-                ...changeData.added.map((item, index) => deriveItem(item, changeData.index + index))
+                changeData.oldValue,
+                changeData.newValue
             );
-            derivative.forEach((item, index) => {
-                item.key = index;
-            });
+            return;
+        }
+        derivative.splice(
+            changeData.index,
+            changeData.removedCount,
+            ...changeData.added.map((item, index) => deriveItem(item, changeData.index + index))
+        );
+        derivative.forEach((item, index) => {
+            item.key = index;
         });
     });
     return derivative;
@@ -101,21 +102,17 @@ function deriveObject<T>(
     updateItem: (item: any, derivative: T, key: string, oldValue?: any, newValue?: any) => T
 ) {
     const derivative = {} as any;
-    transaction(() => {
-        entries(object).forEach(([key, value]) => {
-            derivative[key] = deriveItem(value, key);
-        });
+    entries(object).forEach(([key, value]) => {
+        derivative[key] = deriveItem(value, key);
     });
     observe(object, (change) => {
-        transaction(() => {
-            if (change.type === 'add' || change.type === 'update') {
-                derivative[change.name] = change.type === 'add'
-                    ? deriveItem(change.newValue, change.name)
-                    : updateItem(change.newValue, derivative[change.name], change.name, change.oldValue, change.newValue);
-                return;
-            }
-            delete derivative[change.name];
-        });
+        if (change.type === 'add' || change.type === 'update') {
+            derivative[change.name] = change.type === 'add'
+                ? deriveItem(change.newValue, change.name)
+                : updateItem(change.newValue, derivative[change.name], change.name, change.oldValue, change.newValue);
+            return;
+        }
+        delete derivative[change.name];
     });
     return derivative;
 }
@@ -132,11 +129,15 @@ function isCompositeNode(value: any) {
     return Array.isArray(value) || isObject(value);
 }
 
-export function editor<T extends {} | any[], TParent = undefined>(contract: T, validator?: Validator<T, TParent>): Editor<T, TParent> {
-    return editor_(contract, undefined, undefined, validator);
+export function editor<T extends {} | any[], TParent = undefined>(
+    contract: T,
+    validator?: Validator<T, TParent>,
+    options: EditorOptions = { validateImmediately: false }
+): Editor<T, TParent> {
+    return editor_(contract, undefined, undefined, options, validator);
 }
 
-function editor_(node: any, parentNodeKey: any, parentNode: any, validator?: any): any {
+function editor_(node: any, parentNodeKey: any, parentNode: any, options: EditorOptions, validator?: any): any {
     if (!isPrimitive(node) && !isObservable(node)) {
         throw 'Contract object/array has to be observable.';
     }
@@ -149,7 +150,7 @@ function editor_(node: any, parentNodeKey: any, parentNode: any, validator?: any
                 throw new Error('Can\'t call onChange on contract root.');
             }
             parentNode[editorNode.key] = value;
-            editorNode.isDirty = true;
+            editorNode._isDirty = true;
         },
         get $() {
             if ($cache === undefined) {
@@ -159,7 +160,7 @@ function editor_(node: any, parentNodeKey: any, parentNode: any, validator?: any
                     node,
                     (_0, key) => {
                         const childValidator = validator && validator.$ ? validator.$[isArray ? 0 : key] : undefined;
-                        return editor_(node[key], key, node, childValidator);
+                        return editor_(node[key], key, node, options, childValidator);
                     },
                     (_0, derivative, key, oldValue, newValue) => {
                         if (isCompositeNode(newValue) || isCompositeNode(oldValue) && isPrimitive(newValue)) {
@@ -168,7 +169,7 @@ function editor_(node: any, parentNodeKey: any, parentNode: any, validator?: any
                                 derivative._validationDisposer();
                             }
                             const childValidator = validator && validator.$ ? validator.$[isArray ? 0 : key] : undefined;
-                            return editor_(node[key], key, node, childValidator);
+                            return editor_(node[key], key, node, options, childValidator);
                         }
                         return derivative;
                     }
@@ -184,9 +185,22 @@ function editor_(node: any, parentNodeKey: any, parentNode: any, validator?: any
             }
             return $cache;
         },
-        isDirty: false,
+        _isDirty: false,
+        get isDirty() {
+            // Here we have a lot of freedom to configure composite node isDirty calculation to drive validation patterns
+            return editorNode._isDirty || isCompositeNode(node) && entries(node) && Object.keys(editorNode.$).some((key) => {
+                return editorNode.$[key].isDirty;
+            });
+        },
         hasError: false
     };
+
+    decorate(editorNode, {
+        _isDirty: observable,
+        isDirty: computed,
+        hasError: observable,
+        onChange: action
+    });
 
     // Even though there is a disposer, we are not calling it manually anywhere
     // GC engine is be able to collect reaction as soon as everyhting it is observing can be GC'ed as well
@@ -196,17 +210,25 @@ function editor_(node: any, parentNodeKey: any, parentNode: any, validator?: any
     // dispose should be done automatically for composite nodes when their value changes
     editorNode._validationDisposer = reaction(
         () => {
-            // typeof value === 'function'
             if (!validator) {
+                return false;
+            }
+            if (!editorNode.isDirty && (!options || !options.validateImmediately)) {
                 return false;
             }
             if (typeof validator === 'function') {
                 return !!validator(parentNode[parentNodeKey], parentNode);
             }
+            let result = false;
             if (typeof validator.validator === 'function') {
-                return !!validator.validator(node, parentNode);
+                result = !!validator.validator(node, parentNode);
             }
-            return false;
+            if (isCompositeNode(node)) {
+                result = result || entries(node) && Object.keys(editorNode.$).some((key) => {
+                    return editorNode.$[key].hasError;
+                });
+            }
+            return result;
         },
         (res: boolean) => {
             editorNode.hasError = res;
@@ -221,6 +243,5 @@ function editor_(node: any, parentNodeKey: any, parentNode: any, validator?: any
         }
     });
 
-    // TODO: improve Editor type to return object editor without shallow $
     return editorNode;
 }
