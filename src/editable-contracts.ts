@@ -178,6 +178,8 @@ function editor_(node: any, parentNodeKey: any, parentNode: any, options: Editor
                     get(target, p: any) {
                         if (!target.hasOwnProperty(p)) {
                             node[p] = undefined;
+                            const childValidator = validator && validator.$ ? validator.$[isArray ? 0 : p] : undefined;
+                            target[p] = editor_(node[p], p, node, options, childValidator);
                         }
                         return target[p];
                     }
