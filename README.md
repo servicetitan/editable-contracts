@@ -10,7 +10,7 @@ Editing DTO in React controlled form typically requires:
 3) Validating DTO before it can be submitted back to the server
 4) Subscribing React components on changes in DTO state to update UI
 
-**editable-contracts** purpose is to reduce amount of boilerplate code you need to build controlled React forms without compromising typesafety while adding almost zero additional abstractions on top of existing DTO <--> UI mapping chain. Essentially it takes DTO and derives an editor object of the same shape but loaded with all you need for React form state management and validation.
+**editable-contracts** purpose is to reduce amount of boilerplate code needed to build controlled React forms without compromising typesafety while adding almost zero additional abstractions on top of existing DTO <--> UI mapping chain. Essentially it takes DTO and derives an editor object of the same shape but loaded with all you need for React form state management and validation.
 
 Enough said, example:
 ```TSX
