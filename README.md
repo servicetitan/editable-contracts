@@ -17,7 +17,7 @@ Enough said, example:
 interface User {
     id: number;
     name?: string;
-    age?: number;
+    role?: string;
 }
 
 const user: User = {
@@ -31,8 +31,8 @@ const Form: React.FC = observer(() => (
     <form>
         <label>Name</label>
         <input value={user.name} onChange={userEditor.$.name.onChange} />
-        <label>Age</label>
-        <input value={user.age} onChange={userEditor.$.age.onChange} />
+        <label>Role</label>
+        <input value={user.role} onChange={userEditor.$.role.onChange} />
     </form>
 ));
 ```
