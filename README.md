@@ -22,7 +22,7 @@ interface User {
 
 const user = observable<User>({
     id: 1,
-    name: 'Mark'
+    name: 'Mark Down'
 });
 
 const userEditor = editor(user);
