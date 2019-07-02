@@ -16,6 +16,8 @@ interface EditorOptions {
 
 type EditorNode<T, TParent> = {
     onChange(value: T): void;
+    onChange(event: React.ChangeEvent<HTMLInputElement>): void;
+    onChange(event: React.FormEvent<HTMLInputElement>): void;
     isDirty: boolean;
     hasError: boolean;
     validators(...validators: ValidatorFunction<T, TParent>[]): void
@@ -145,7 +147,11 @@ function editor_(node: any, parentNodeKey: any, parentNode: any, options: Editor
     let $cache: any;
     const editorNode: any = {
         key: parentNodeKey,
-        onChange(value: any) {
+        onChange(valueOrEvent: any) {
+            let value = valueOrEvent;
+            if (valueOrEvent && valueOrEvent.nativeEvent && valueOrEvent.nativeEvent instanceof Event) {
+                value = valueOrEvent.currentTarget.value;
+            }
             if (parentNode === undefined) {
                 throw new Error('Can\'t call onChange on contract root.');
             }
