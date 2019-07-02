@@ -64,7 +64,7 @@ const contractEditor = editor(contract, {
   }
 });
 
-const App = observer(() => {
+const App: React.FC = observer(() => {
   return (
     <Form>
       <Input
