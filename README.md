@@ -36,3 +36,79 @@ const Form: React.FC = observer(() => (
     </form>
 ));
 ```
+
+Example with validation and Anvil design system ([Codesandbox Demo](https://codesandbox.io/s/nice-hertz-v20wom70)):
+```TSX
+const contract = observable<{
+  id: number;
+  name: string;
+  age: string;
+  email?: string;
+  role?: string;
+  garage?: string[];
+}>({
+  id: 1,
+  name: "Jack",
+  age: "20"
+});
+
+const contractEditor = editor(contract, {
+  $: {
+    name: (value: string) => value === "Max" && "Max is already occupied",
+    age: (value: string) => !/^\d*$/.test(value) && "Only digits allowed",
+    garage: {
+      $: [(value: string) => value.includes("Harley") && "Only cars allowed"]
+    }
+  }
+});
+
+const App = observer(() => {
+  return (
+    <Form>
+      <Input
+        label="Name"
+        {...inputBinding(contract.name, contractEditor.$.name)}
+      />
+      <Input
+        label="Age"
+        {...inputBinding(contract.age, contractEditor.$.age)}
+      />
+      <Input
+        label="Email"
+        {...inputBinding(contract.email, contractEditor.$.email)}
+      />
+      <Input
+        label="Role"
+        {...inputBinding(contract.role, contractEditor.$.role)}
+      />
+      <Button
+        onClick={() => {
+          if (!contract.garage) {
+            contract.garage = [];
+          }
+          contract.garage.push("");
+        }}
+        disabled={contract.garage && contract.garage.length >= 3}
+      >
+        Add Car to Garage
+      </Button>
+      <div>
+        {contract.garage &&
+          contract.garage.map((_0, index) => (
+            <Input
+              key={`car_${index}`}
+              label={"Car " + (index + 1)}
+              {...inputBinding(
+                contract.garage![index],
+                contractEditor.$.garage.$![index]
+              )}
+            />
+          ))}
+      </div>
+    </Form>
+  );
+});
+```
+
+## Why editable-contracts?
+TBD
