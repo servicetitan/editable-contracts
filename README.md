@@ -56,10 +56,10 @@ const contract = observable<User>({
 
 const contractEditor = editor(contract, {
   $: {
-    name: (value: string) => value && value.length >= 15 && "Name is too long",
-    age: (value: string) => !/^\d*$/.test(value) && "Only digits allowed",
+    name: value => value && value.length >= 15 && "Name is too long",
+    age: value => !/^\d*$/.test(value) && "Only digits allowed",
     garage: {
-      $: [(value: string) => value.includes("Harley") && "Only cars allowed"]
+      $: [value => value.includes("Harley") && "Only cars allowed"]
     }
   }
 });
