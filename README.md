@@ -48,13 +48,13 @@ interface User {
   garage?: string[];
 }
 
-const contract = observable<User>({
+const user = observable<User>({
   id: 1,
   name: "Jack",
   age: "20"
 });
 
-const contractEditor = editor(contract, {
+const userEditor = editor(user, {
   $: {
     name: value => value && value.length >= 15 && "Name is too long",
     age: value => !/^\d*$/.test(value) && "Only digits allowed",
@@ -67,42 +67,30 @@ const contractEditor = editor(contract, {
 const App: React.FC = observer(() => {
   return (
     <Form>
-      <Input
-        label="Name"
-        {...inputBinding(contract.name, contractEditor.$.name)}
-      />
-      <Input
-        label="Age"
-        {...inputBinding(contract.age, contractEditor.$.age)}
-      />
-      <Input
-        label="Email"
-        {...inputBinding(contract.email, contractEditor.$.email)}
-      />
-      <Input
-        label="Role"
-        {...inputBinding(contract.role, contractEditor.$.role)}
-      />
+      <Input label="Name" {...inputBinding(user.name, userEditor.$.name)} />
+      <Input label="Age" {...inputBinding(user.age, userEditor.$.age)} />
+      <Input label="Email" {...inputBinding(user.email, userEditor.$.email)} />
+      <Input label="Role" {...inputBinding(user.role, userEditor.$.role)} />
       <Button
         onClick={() => {
-          if (!contract.garage) {
-            contract.garage = [];
+          if (!user.garage) {
+            user.garage = [];
           }
-          contract.garage.push("");
+          user.garage.push("");
         }}
-        disabled={contract.garage && contract.garage.length >= 3}
+        disabled={user.garage && user.garage.length >= 3}
       >
         Add Car to Garage
       </Button>
       <div>
-        {contract.garage &&
-          contract.garage.map((_0, index) => (
+        {user.garage &&
+          user.garage.map((_0, index) => (
             <Input
               key={`car_${index}`}
               label={"Car " + (index + 1)}
               {...inputBinding(
-                contract.garage![index],
-                contractEditor.$.garage.$![index]
+                user.garage![index],
+                userEditor.$.garage.$![index]
               )}
             />
           ))}
