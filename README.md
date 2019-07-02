@@ -20,10 +20,10 @@ interface User {
     role?: string;
 }
 
-const user: User = {
+const user = observable<User>({
     id: 1,
     name: 'Mark'
-};
+});
 
 const userEditor = editor(user);
 
