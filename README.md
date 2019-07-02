@@ -39,14 +39,16 @@ const Form: React.FC = observer(() => (
 
 Example with validation and Anvil design system ([Codesandbox Demo](https://codesandbox.io/s/nice-hertz-v20wom70)):
 ```TSX
-const contract = observable<{
+interface User {
   id: number;
   name: string;
   age: string;
   email?: string;
   role?: string;
   garage?: string[];
-}>({
+}
+
+const contract = observable<User>({
   id: 1,
   name: "Jack",
   age: "20"
@@ -54,7 +56,7 @@ const contract = observable<{
 
 const contractEditor = editor(contract, {
   $: {
-    name: (value: string) => value === "Max" && "Max is already occupied",
+    name: (value: string) => value && value.length >= 15 && "Name is too long",
     age: (value: string) => !/^\d*$/.test(value) && "Only digits allowed",
     garage: {
       $: [(value: string) => value.includes("Harley") && "Only cars allowed"]
