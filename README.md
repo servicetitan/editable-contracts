@@ -37,7 +37,7 @@ const Form: React.FC = observer(() => (
 ));
 ```
 
-Example with validation and Anvil design system ([Codesandbox Demo](https://codesandbox.io/s/nice-hertz-v20wom70)):
+Example with validation and Anvil design system ([Codesandbox Demo](https://codesandbox.io/s/editable-contracts-demo-v20wom70)):
 ```TSX
 interface User {
   id: number;
