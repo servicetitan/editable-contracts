@@ -5,7 +5,7 @@
 // 4) Object validation runs two times on child change
 // Test that derivation is optimal
 
-import { isObservable, entries, IObservableArray, IObservableObject, observe, transaction, reaction, decorate, observable, action, computed, has } from 'mobx';
+import { isObservable, entries, IObservableArray, IObservableObject, observe, reaction, decorate, observable, action, computed } from 'mobx';
 
 type PrimitiveType = string | number | boolean | Date;
 
