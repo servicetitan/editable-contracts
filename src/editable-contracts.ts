@@ -66,7 +66,7 @@ interface DeriveFunc {
     ): any;
 }
 
-function deriveArray<T, TT>(
+function derive Array<T, TT>(
     array: IObservableArray<T>,
     deriveItem: (item: T, key: number) => WithKey<TT>,
     updateItem: (item: T, derivative: WithKey<TT>, key: number, oldValue?: any, newValue?: any) => WithKey<TT>
