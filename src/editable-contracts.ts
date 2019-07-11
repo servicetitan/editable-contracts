@@ -56,13 +56,13 @@ export type Validator<T, TParent = undefined> = NonNullable<T> extends Primitive
     ? ValidatorFunction<T, TParent>
     : ValidatorCompositeNode<T, TParent>;
 
-type WithKey<T> = T & { key: number | string };
+type WithKey<T> = T & { key: string | number | symbol };
 
 interface DeriveFunc {
     (
         object: any,
-        deriveItem: (item: any, key: number | string) => any,
-        updateItem: (item: any, derivative: any, key: number | string, oldValue?: any, newValue?: any) => any
+        deriveItem: (item: any, key: string | number | symbol) => any,
+        updateItem: (item: any, derivative: any, key: string | number | symbol, oldValue?: any, newValue?: any) => any
     ): any;
 }
 
@@ -100,8 +100,8 @@ function deriveArray<T, TT>(
 
 function deriveObject<T>(
     object: IObservableObject,
-    deriveItem: (item: any, key: string) => T,
-    updateItem: (item: any, derivative: T, key: string, oldValue?: any, newValue?: any) => T
+    deriveItem: (item: any, key: string | number | symbol) => T,
+    updateItem: (item: any, derivative: T, key: string | number | symbol, oldValue?: any, newValue?: any) => T
 ) {
     const derivative = {} as any;
     entries(object).forEach(([key, value]) => {
