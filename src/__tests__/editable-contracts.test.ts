@@ -442,7 +442,7 @@ describe('Validation', () => {
         inventoryDto.age = 18;
 
         jest.runAllTimers();
-        expect(inventoryDtoEditor.$.age.hasError).toBe(true);
+        expect(inventoryDtoEditor.$.age.hasError).toBe(false);
 
         inventoryDto.name = 'Alcohol';
 
