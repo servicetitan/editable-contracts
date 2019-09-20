@@ -21,18 +21,18 @@
   },
   "homepage": "https://github.com/servicetitan/editable-contracts#readme",
   "devDependencies": {
-    "@types/jest": "^24.0.11",
-    "@types/react": "^16.8.22",
-    "coveralls": "^3.0.3",
-    "jest": "^24.5.0",
-    "ts-jest": "^24.0.0",
-    "tslint": "^5.14.0",
-    "tslint-config-airbnb": "^5.11.1",
-    "typescript": "^3.5.0",
+    "@types/jest": "^24.0.18",
+    "@types/react": "^16.9.2",
+    "coveralls": "^3.0.6",
+    "jest": "^24.9.0",
+    "ts-jest": "^24.1.0",
+    "tslint": "^5.20.0",
+    "tslint-config-airbnb": "^5.11.2",
+    "typescript": "^3.6.3",
     "mobx": "^5.11.0"
   },
   "peerDependencies": {
-    "mobx": "^5.0.0"
+    "mobx": "^5.13.0"
   },
   "jest": {
     "testEnvironment": "node"
